@@ -94,7 +94,7 @@ class DesignSpec(BaseModel):
     title: str
     question: str
     pico: PICO
-    unit_of_analysis: Literal["icu_stay", "admission", "patient"]
+    unit_of_analysis: str                                     # a unit level of the dataset (registry `units`)
     repeated_units: Literal["first_only", "all_independent", "one_per_patient_other"] = "first_only"
     index_time: str                                           # text definition of time zero
     prediction_time_h: float = 0.0                            # predictors are complete this many hours after index
@@ -139,23 +139,30 @@ class DesignSpec(BaseModel):
         return out
 
 
-def load_spec(path: str | Path) -> DesignSpec:
+def load_spec(path: str | Path, dataset: Optional[str] = None) -> DesignSpec:
+    """Parse and validate a spec; with a dataset, unit_of_analysis must be one of its registry unit levels."""
     raw = Path(path).read_bytes()
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:          # e.g. a stray cp1252/cp949 byte from a shell heredoc
         text = raw.decode("utf-8", errors="replace")
-    data = yaml.safe_load(text)
-    return DesignSpec.model_validate(data)
+    spec = DesignSpec.model_validate(yaml.safe_load(text))
+    if dataset:
+        from ucd import datasets
+        levels = datasets.levels(dataset)
+        if levels and spec.unit_of_analysis not in levels:
+            raise ValueError(f"unit_of_analysis {spec.unit_of_analysis!r} is not a unit level of this dataset; "
+                             f"use one of: {', '.join(levels)} (Data Card, 'Units of analysis')")
+    return spec
 
 
 TEMPLATE = """\
 title: ""
 question: ""
 pico: {population: "", exposure_or_predictor: "", comparator: "", outcome: ""}
-unit_of_analysis: icu_stay          # icu_stay | admission | patient
+unit_of_analysis: icu_stay          # one of the dataset's unit levels (Data Card, "Units of analysis")
 repeated_units: first_only          # first_only | all_independent | one_per_patient_other
-index_time: "ICU admission (icustays.intime)"
+index_time: "time zero as the protocol defines it, e.g. ICU admission"
 prediction_time_h: 0                # predictors complete this many hours after index (e.g. 24 for day-1 scores)
 outcome_from_h: 0                   # outcomes counted from this many hours after index: 0 = from time zero,
                                     # = prediction_time_h for a landmark (then exclude earlier events with a flag)

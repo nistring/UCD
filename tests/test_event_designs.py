@@ -2,6 +2,7 @@
 critic rules T2-T13. No data, no network."""
 import numpy as np
 import pandas as pd
+import pytest
 
 
 def _spec(**model):
@@ -68,8 +69,11 @@ def test_event_design_rules_fire_on_the_usual_failure_modes():
     card = {"flow": [{"n_units": 1518}, {"n_units": 1518}, {"n_units": 1518}], "units_per_patient_gt1_frac": 0.2,
             "timing": {"exposed_outside_window": 12}}
     f = C._F()
-    C.event_rules(f, spec, card, protocol, [{"id": "P1", "text": "adults"}])
+    C.event_rules(f, spec, card, protocol, [{"id": "P1", "text": "adults"}], "mimic")
     assert {"T2", "T3", "T6", "T7", "T10", "T11", "T13"} <= {i["rule"] for i in f.items}
+    g = C._F()                     # T7 names its columns from the registry: a dataset without `death` gets no T7
+    C.event_rules(g, spec, card, protocol, [{"id": "P1", "text": "adults"}], "unregistered")
+    assert "T7" not in {i["rule"] for i in g.items}
 
 
 def test_cohort_definition_findings_come_first():
@@ -94,3 +98,21 @@ def test_heuristic_event_rules_block_only_on_clear_evidence():
     assert "T2" not in sev                                   # landmark declared, date_diff form recognised
     assert sev.get("T10") == "warn"                          # flat flow without filtering in the final SELECT
     assert sev.get("T11") == "warn"                          # the term is only in a background line
+
+
+def test_unit_levels_come_from_the_registry(tmp_path):
+    import subprocess
+    import sys
+
+    from ucd import datasets
+    from ucd.spec import load_spec
+    assert datasets.levels("mimic") == ["icu_stay", "admission", "patient"]
+    assert datasets.death_fields("mimic") == (["hospital_expire_flag"], ["dod"])
+    tpl = subprocess.run([sys.executable, "-m", "ucd", "template"], capture_output=True, text=True).stdout
+    good, bad = tmp_path / "good.yaml", tmp_path / "bad.yaml"
+    good.write_text(tpl, encoding="utf-8")
+    bad.write_text(tpl.replace("unit_of_analysis: icu_stay", "unit_of_analysis: visit"), encoding="utf-8")
+    assert load_spec(good, "mimic").unit_of_analysis == "icu_stay"
+    with pytest.raises(ValueError, match="icu_stay, admission, patient"):
+        load_spec(bad, "mimic")
+    assert load_spec(bad).unit_of_analysis == "visit"      # without a dataset only the format is checked

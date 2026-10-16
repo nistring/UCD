@@ -10,7 +10,10 @@
 #   source               raw tables <module>/<table>.csv[.gz]; first existing path wins; env override <ENV>_SOURCE
 #   parquet_env          env var pointing at the parquet folder (default .kcd_cache/parquet/<name>)
 #   units                unit levels of analysis, fine -> coarse: the id column and a table holding that id plus
-#                        the ids of the coarser levels (used to compare cohorts with a ground truth)
+#                        the ids of the coarser levels. The level names are the values a design may use as
+#                        unit_of_analysis; the ids align cohorts with a ground truth
+#   death                optional, for critic rule T7: in_hospital_only = columns that record only in-hospital
+#                        deaths; after_discharge = columns that also cover deaths after discharge
 #   lookups              dictionary tables for the lookup action: kind -> [table, columns shown, columns searched]
 #                        (without it, every table named d_* is searched)
 #   concepts             optional library of tested SQL (one CREATE TABLE <derived>.<name> AS SELECT per file) and
@@ -29,6 +32,9 @@ mimic:
     icu_stay:  {id: stay_id,    table: icu.icustays}
     admission: {id: hadm_id,    table: hosp.admissions}
     patient:   {id: subject_id, table: hosp.patients}
+  death:
+    in_hospital_only: [hospital_expire_flag]
+    after_discharge: [dod]
   lookups:
     items: [icu.d_items, [itemid, label, abbreviation, linksto, category, unitname], [label, abbreviation, category]]
     labs:  [hosp.d_labitems, [itemid, label, fluid, category], [label, fluid, category]]

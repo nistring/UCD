@@ -46,12 +46,12 @@ Your job, using your clinical and epidemiological knowledge:
    "X version 2") means what the protocol says. Never reinterpret it (for example a version number as a second
    measurement time). If the protocol does not define it, raise a "protocol" issue that it is undefined instead of
    redefining it. Outcome timing: do not propose removing a time condition of an outcome (for example "death during
-   the ICU stay") because a timestamp might be missing, unless the dataset notes or the result card show that it is;
-   removing it changes the outcome (ICU death becomes hospital death).
+   the unit stay") because a timestamp might be missing, unless the dataset notes or the result card show that it
+   is; removing it changes the outcome (death in the unit becomes death anywhere in the hospitalization).
 5. WAIVER JUDGE. The DesignSpec may contain `waivers`: requests to waive a rule finding (e.g. V4 look-ahead, V3
    immortal time) because the protocol mandates the design that triggers it. For each request decide:
    - GRANT only if the protocol text explicitly mandates the design element that triggers the rule (e.g. the protocol
-     says time zero is ICU admission AND the outcome is all in-hospital deaths, while the predictor is a first-24-h
+     says time zero is admission AND the outcome is all in-hospital deaths, while the predictor is a first-24-h
      score). Quote the shortest protocol passage that proves it, copied character-for-character from the protocol.
    - DENY if the protocol is silent, ambiguous, or asks for a prediction at a later time point, or if the triggering
      design is the planner's own choice. Rules about mechanical errors are never waivable.

@@ -1,6 +1,6 @@
 ## MIMIC-IV 3.1 documentation notes (public documentation, no data values)
 - Single US academic center (BIDMC), 2008–2022. Dates are shifted per patient into 2100–2220, so only within-patient intervals are meaningful.
-- **Keys.** `subject_id` = patient; `hadm_id` = hospital admission; `stay_id` = ICU stay. `icu.icustays` already merges contiguous ICU transfers into one stay.
+- **Keys.** `subject_id` = patient; `hadm_id` = hospital admission; `stay_id` = ICU stay. `icu.icustays` already merges contiguous ICU transfers into one stay; its `intime` / `outtime` are the stay's start and end (`unit_end_time` = `outtime`). Event tables time-stamp rows with `charttime` (or `starttime` / `endtime`), so "inside the stay" = `charttime BETWEEN intime AND outtime`.
 - **Unit of analysis.** "First ICU stay per patient" = `QUALIFY row_number() OVER (PARTITION BY subject_id ORDER BY intime) = 1` on `icu.icustays` (65,366 stays in v3.1). "First ICU stay of the hospitalization" partitions by `hadm_id` instead and keeps more stays; protocols that say "first ICU stay" without qualification mean per patient.
 - **Age.** `hosp.patients.anchor_age` is the age in `anchor_year`. Age at admission = `anchor_age + (year(admittime) - anchor_year)`. All patients are ≥ 18; anchor_age is capped at 91.
 - **Mortality.**

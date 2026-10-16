@@ -183,11 +183,13 @@ def critique(spec: DesignSpec, card: dict[str, Any], history: list[dict[str, Any
         f.add("V6b", "validity", "block", f"Design says first unit only, but {rep:.1%} of units are repeats",
               evidence={"units_per_patient_gt1_frac": rep}, fix="Apply the first-unit rule in analysis_sql.")
     cont = _num(card.get("contiguous_with_previous_unit_frac"))
-    if cont is not None and cont > 0.01 and spec.unit_of_analysis == "icu_stay":
+    levels = _levels(dataset)
+    finest = len(levels) > 1 and spec.unit_of_analysis == levels[0]     # stay-like units can be split by transfers
+    if cont is not None and cont > 0.01 and finest:
         f.add("V7", "validity", "warn", f"{cont:.1%} of units start within 1 h of the same patient's previous unit "
               "(transfers split into separate stays?)", evidence={"contiguous_frac": cont},
-              fix="Merge contiguous ICU segments into one stay, or use the first segment's intime as index.")
-    elif "contiguous_with_previous_unit_frac" not in card and spec.unit_of_analysis == "icu_stay":
+              fix="Merge contiguous segments into one unit, or use the first segment's start as index.")
+    elif "contiguous_with_previous_unit_frac" not in card and finest:
         f.add("V7b", "validity", "info", "unit_end_time not returned: transfer-splitting cannot be checked",
               fix="Return unit_end_time.")
     if "adult" in q and not any(re.search(r"18|adult|age", c.description.lower() + c.flag.lower())
@@ -236,7 +238,7 @@ def critique(spec: DesignSpec, card: dict[str, Any], history: list[dict[str, Any
                 f.add("Q1", "quality", "block", f"'{col}' is missing in {mf:.0%} of units", fix="Check the mapping/window or drop the variable.")
             elif mf > 0.3:
                 f.add("Q1", "quality", "warn", f"'{col}' is missing in {mf:.0%} of units",
-                      fix="Check the itemid/window mapping; consider a missing-indicator or a wider window.")
+                      fix="Check the item-code/window mapping; consider a missing-indicator or a wider window.")
         xf = _num(d.get("extreme_frac"))
         if xf is not None and xf > 0.01:
             f.add("Q2", "quality", "warn", f"'{col}': {xf:.1%} of values are > 10 IQR from the median (unit mix or error values?)",
@@ -309,7 +311,7 @@ def critique(spec: DesignSpec, card: dict[str, Any], history: list[dict[str, Any
     protocol = options.get("protocol") or spec.question
     for pk in packs.checks(protocol, spec.analysis_sql, dataset):
         f.add(pk["rule"], "validity", pk.get("severity", "warn"), pk["message"], fix=pk["fix"])
-    event_rules(f, spec, card, protocol, protocol_items)
+    event_rules(f, spec, card, protocol, protocol_items, dataset)
     if spec.model.type == "cohort":                    # no outcome and no model: those rules do not apply
         f.items = [i for i in f.items if i["rule"] not in COHORT_SKIP]
     out = _score(f, gate=align_fail)
@@ -317,8 +319,24 @@ def critique(spec: DesignSpec, card: dict[str, Any], history: list[dict[str, Any
     return out
 
 
+def _levels(dataset: Optional[str]) -> list[str]:
+    from ucd import datasets
+    try:
+        return datasets.levels(dataset) if dataset else []
+    except ValueError:                                 # an unregistered dataset name (tests, old runs)
+        return []
+
+
+def _death_fields(dataset: Optional[str]) -> tuple[list[str], list[str]]:
+    from ucd import datasets
+    try:
+        return datasets.death_fields(dataset) if dataset else ([], [])
+    except ValueError:
+        return [], []
+
+
 def event_rules(f: "_F", spec: DesignSpec, card: dict[str, Any], protocol: str,
-                items: Optional[list[dict[str, Any]]]) -> None:
+                items: Optional[list[dict[str, Any]]], dataset: Optional[str] = None) -> None:
     """Rules for event-anchored and landmark designs (docs/critic_rules.md): deterministic, topic-independent checks
     on the spec, the SQL text and aggregate counts."""
     import yaml
@@ -334,8 +352,8 @@ def event_rules(f: "_F", spec: DesignSpec, card: dict[str, Any], protocol: str,
         if not (in_sql and in_flags):
             f.add("T2", "validity", "block" if not in_flags else "warn", f"A {li} h landmark is declared (outcome_from_h = prediction_time_h = {li}) "
                   f"but no population flag keeps only units alive and still in the unit at time zero + {li} h",
-                  fix=f"Add a flag 'alive and in the unit at index_time + {li} h' (outtime >= index_time + INTERVAL {li} "
-                      "HOUR and no death before it) and list it in population_criteria.")
+                  fix=f"Add a flag 'alive and in the unit at index_time + {li} h' (unit_end_time >= index_time + "
+                      f"INTERVAL {li} HOUR and no death before it) and list it in population_criteria.")
     out_win = _num((card.get("timing") or {}).get("exposed_outside_window"))  # T3 exposure before the landmark
     if out_win:
         f.add("T3", "validity", "block", f"{card['timing']['exposed_outside_window']} exposed units start the exposure "
@@ -346,13 +364,16 @@ def event_rules(f: "_F", spec: DesignSpec, card: dict[str, Any], protocol: str,
     upp = _num(card.get("units_per_patient_gt1_frac"))                          # T6 unit level
     if upp and re.search(r"per patient|each patient", scope or "", re.I) and not any(i["rule"] == "V6b" for i in f.items):
         f.add("T6", "validity", "block", f"The protocol asks for one unit per patient, but {upp:.1%} of units are repeat "
-              "units of the same patient", fix="Rank the stays within subject_id (row_number() = 1), not within hadm_id.")
+              "units of the same patient", fix="Rank the units within the patient (row_number() = 1 partitioned by the "
+              "patient id), not within the admission.")
     outcome = "\n".join(l for l in (protocol or "").splitlines() if re.match(r"\s*outcome\s*:", l, re.I))
-    if re.search(r"all[- ]cause|any death record|after discharge|post-discharge|\d+[- ]day", outcome, re.I) and \
-            re.search(r"hospital_expire_flag", sql, re.I) and not re.search(r"\bdod\b", sql, re.I):   # T7
+    in_hosp, after = _death_fields(dataset)                                    # T7, from the registry's `death`
+    used = [c for c in in_hosp if re.search(rf"\b{re.escape(c)}\b", sql, re.I)]
+    if used and after and re.search(r"all[- ]cause|any death record|after discharge|post-discharge|\d+[- ]day",
+                                    outcome, re.I) and not any(re.search(rf"\b{re.escape(c)}\b", sql, re.I) for c in after):
         f.add("T7", "validity", "warn", "The outcome is all-cause death over a fixed horizon, but the SQL uses only "
-              "hospital_expire_flag, which misses deaths after discharge", fix="Use patients.dod (date of death; end "
-              "of that day) together with admissions.deathtime.")
+              f"{', '.join(used)}, which records in-hospital deaths only", fix=f"Also use {', '.join(after)} for deaths "
+              "after discharge (see the dataset notes for how it is recorded).")
     parts = sqlcte.split(spec.analysis_sql or "")                              # T10 flow uninformative
     final = re.sub(r"'(?:[^']|'')*'", "''", parts[1] if parts else spec.analysis_sql or "")
     flags = [c.flag for c in spec.population_criteria]
@@ -374,7 +395,7 @@ def event_rules(f: "_F", spec: DesignSpec, card: dict[str, Any], protocol: str,
                   f"protocol_items.yaml: {', '.join(gone[:12])}", fix="Add a protocol item (or a declared deviation) for each.")
     if re.search(r"\blabel\s+I?LIKE\s*'", spec.analysis_sql or "", re.I):     # T13 dictionary-label matching
         f.add("T13", "validity", "warn", "Items are selected by matching dictionary labels (label LIKE '%...%')",
-              fix="Use explicit itemids from lookup, or the tested concept.* table for the concept.")
+              fix="Use explicit item codes from lookup, or the tested concept.* table for the concept.")
 
 
 COHORT_FIRST = ("T", "V", "P", "A", "U", "PK")  # cohort-definition rules are listed (and fixed) before model rules

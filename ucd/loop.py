@@ -59,10 +59,10 @@ Reply with exactly ONE JSON object per turn. File content and SQL never go insid
 block (```sql, ```yaml or ```) right after the JSON. Example (replace lines 12-14 of the query):
 {"action": "edit", "file": "design/query.sql", "lines": [12, 14]}
 ```sql
-    AND l.charttime BETWEEN i.intime AND i.intime + INTERVAL 24 HOUR
+    AND m.event_time BETWEEN u.start_time AND u.start_time + INTERVAL 24 HOUR
 ```
 Available actions:
-{"action": "lookup", "term": ["sodium", "creatinine"], "kind": "all"}      itemids/codes, up to 5 terms; kind: all, or a dictionary named in the Data Card
+{"action": "lookup", "term": ["sodium", "creatinine"], "kind": "all"}      item/diagnosis codes, up to 5 terms; kind: all, or a dictionary named in the Data Card
 {"action": "explore", "group": ["col"], "metrics": ["avg(x) AS mean_x"]}   + block = the FROM query; returns aggregates only
 {"action": "write", "file": "design/query.sql"}                           + block = the whole new content of the file
 {"action": "edit", "file": "design/query.sql", "lines": [a, b]}           + block = what replaces lines a..b as numbered
@@ -122,7 +122,7 @@ def _check_content(run_dir: Path, rel: str, content: str) -> str:
             return f"REFUSED: {e}"
     if rel == "protocol_items.yaml" and not _items_ok(content):   # every run reads it (E-66)
         return ("REFUSED: protocol_items.yaml must be a YAML list of items, one per line, e.g.\n"
-                "- {id: P1, kind: population, text: \"Adults (age >= 18) admitted to the ICU\"}\n"
+                "- {id: P1, kind: population, text: \"Adults (age >= 18) at admission\"}\n"
                 "- {id: P2, kind: outcome, text: \"In-hospital mortality\"}\n"
                 "Quote the text when it contains a colon.")
     if rel in (SPEC_FILE, SQL_FILE) and re.search(r"^\s*```", content, re.M):
@@ -188,7 +188,7 @@ def _act(act: dict[str, Any], run_dir: Path, turn: int, asker: Asker | None = No
     if kind == "lookup":
         n_look = _n_lookups(run_dir)
         if n_look >= MAX_LOOKUPS:
-            return (f"REFUSED: lookup budget used ({MAX_LOOKUPS} terms). You have enough itemids and codes: write the "
+            return (f"REFUSED: lookup budget used ({MAX_LOOKUPS} terms). You have enough codes: write the "
                     "design files and run.")
         lk, known = str(act.get("kind") or "all").strip().lower(), datacard.lookups(dataset)
         lk = next((k for k in known if lk in (k, k.rstrip("s"), k + "s") or LOOKUP_SYNONYMS.get(lk) == k), lk)
@@ -436,7 +436,7 @@ def run_loop(topic: str, run_dir: Path, datasets: list[str], max_turns: int = MA
                     n_prob += 1
                     if n_prob <= FALLBACK_DESIGNS:
                         obs = (f"BACK TO THE DESIGN LOOP: {prob}. Change the design within the protocol and run again: "
-                               "an over-strict criterion, a wrong code or itemid, a wrong join or time window is the "
+                               "an over-strict criterion, a wrong code, a wrong join or time window is the "
                                f"usual cause ({FALLBACK_DESIGNS - n_prob + 1} more design(s) before the user is asked). "
                                "If the protocol cannot be answered with this data, use the infeasible action.\n\n" + obs)
                     else:
@@ -639,8 +639,7 @@ def _system_prompt(run_dir: Path, question: str, dataset: str) -> str:
     return system + ("\n\n## Action protocol\n" + ACTIONS
                      + "\n\n## DesignSpec fields (design/spec.yaml; the query is design/query.sql)\n"
                      + _capture(["template"]).split("\nanalysis_sql:")[0].strip()
-                     + (f"\n\n{lib}\nUse these tested concepts instead of re-deriving the same definitions (e.g. "
-                        "age at hospital admission, first ICU stay, KDIGO stage, SOFA, suspected infection): fewer SQL "
+                     + (f"\n\n{lib}\nUse these tested concepts instead of re-deriving the same definitions: fewer SQL "
                         "errors, and a concept is computed once and then cached." if lib else "")
                      + packs.planner_notes(question, dataset))
 

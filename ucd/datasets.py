@@ -10,7 +10,6 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = Path(__file__).resolve().parent / "datasets.yaml"
-LEVELS = ["icu_stay", "admission", "patient"]       # unit_of_analysis values, fine -> coarse
 
 
 @lru_cache(maxsize=1)
@@ -30,7 +29,18 @@ def get(name: str) -> dict[str, Any]:
     reg = registry()
     if name not in reg:
         raise ValueError(f"unknown dataset {name!r}; available: {', '.join(reg)} (ucd/datasets.yaml)")
-    return {"name": name, "label": name, "description": "", "units": {}, "lookups": {}, **reg[name]}
+    return {"name": name, "label": name, "description": "", "units": {}, "lookups": {}, "death": {}, **reg[name]}
+
+
+def levels(name: str) -> list[str]:
+    """The dataset's unit levels (values of unit_of_analysis), fine -> coarse, as listed in the registry."""
+    return list(get(name)["units"] or {})
+
+
+def death_fields(name: str) -> tuple[list[str], list[str]]:
+    """(columns that record in-hospital deaths only, columns that also cover deaths after discharge); critic rule T7."""
+    d = get(name)["death"] or {}
+    return list(d.get("in_hospital_only") or []), list(d.get("after_discharge") or [])
 
 
 def parquet_dir(name: str) -> Path:

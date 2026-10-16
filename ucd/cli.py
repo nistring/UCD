@@ -147,7 +147,7 @@ def cmd_run(a) -> int:
     shutil.copy(a.spec, idir / "spec.yaml")
     t0 = time.time()
     try:
-        spec = load_spec(a.spec)
+        spec = load_spec(a.spec, a.dataset)
     except Exception as e:
         card = {"error": f"spec is invalid: {str(e)[:1500]}"}
         crit = C._score(C._F(), hard=True)

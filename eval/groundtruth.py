@@ -29,7 +29,6 @@ from ucd.cli import _hidden_path, _history, _rel   # noqa: E402
 from ucd.gate import Gate                           # noqa: E402
 
 OUT = ROOT / "eval" / "gt"
-LEVELS = datasets.LEVELS
 GENERIC_ALIASES = {"icu_stay": ["stay_id", "icustay_id", "icu_stay_id", "stayid", "icustay", "patientunitstayid"],
                    "admission": ["hadm_id", "hadmid", "admission_id", "hospital_admission_id", "encounter_id",
                                  "patienthealthsystemstayid"],
@@ -39,9 +38,8 @@ OUTCOME_ALIASES = ["outcome", "hospital_expire_flag", "in_hospital_death", "inho
 
 # ------------------------------------------------------------------ dataset units
 def units(dataset: str) -> dict[str, dict[str, str]]:
-    """level -> {id, table}, fine -> coarse, for the levels the dataset defines."""
-    u = datasets.get(dataset).get("units") or {}
-    return {lvl: u[lvl] for lvl in LEVELS if lvl in u}
+    """level -> {id, table}, fine -> coarse, as the registry lists the dataset's levels."""
+    return dict(datasets.get(dataset).get("units") or {})
 
 
 def links(con, dataset: str) -> dict[str, pd.DataFrame]:
@@ -86,8 +84,8 @@ def map_columns(df: pd.DataFrame, u: dict | None = None) -> dict[str, Any]:
     u = u if u is not None else units(datasets.default())
     cols = {c.lower().strip(): c for c in df.columns}
     m: dict[str, Any] = {"id_column": None, "level": None, "outcome_column": None}
-    for lvl in LEVELS:                                     # finest level present wins
-        names = ([u[lvl]["id"]] if lvl in u else []) + GENERIC_ALIASES[lvl]
+    for lvl in u:                                          # finest level present wins
+        names = [u[lvl]["id"]] + GENERIC_ALIASES.get(lvl, [])
         hit = next((cols[a.lower()] for a in names if a.lower() in cols), None)
         if hit:
             m.update(id_column=hit, level=lvl)
@@ -106,9 +104,10 @@ def agent_cohort(run_dir: Path, dataset: str) -> tuple[pd.DataFrame, str, int]:
         f = _hidden_path(run_dir, dataset, h["iter"])
         if f.exists():
             spec = run_dir / dataset / f"iter_{h['iter']}" / "spec.yaml"
-            lvl = (yaml.safe_load(spec.read_text(encoding="utf-8")) or {}).get("unit_of_analysis", "icu_stay") \
-                if spec.exists() else "icu_stay"
-            return pd.read_parquet(f), lvl if lvl in LEVELS else "icu_stay", h["iter"]
+            levels = datasets.levels(dataset)
+            lvl = (yaml.safe_load(spec.read_text(encoding="utf-8")) or {}).get("unit_of_analysis") \
+                if spec.exists() else None
+            return pd.read_parquet(f), lvl if lvl in levels else levels[0], h["iter"]
     raise SystemExit(f"no stored cohort for {run_dir} (no iteration produced one)")
 
 
@@ -116,7 +115,7 @@ def compare(run_dir: Path, gt_df: pd.DataFrame, mapping: dict, link: dict, u: di
     ag, ag_lvl, it = agent_cohort(run_dir, dataset)
     gt_ids = pd.to_numeric(gt_df[mapping["id_column"]], errors="coerce").dropna().astype("int64")
     gt_lvl = mapping["level"] or guess_level(gt_ids, link, u)
-    common = max(ag_lvl, gt_lvl, key=LEVELS.index)                       # coarser of the two
+    common = max(ag_lvl, gt_lvl, key=list(u).index)                      # coarser of the two
     A = to_level(ag["unit_id"], ag_lvl, common, link, u)
     G = to_level(gt_ids, gt_lvl, common, link, u)
     inter, union = len(A & G), len(A | G)
@@ -170,7 +169,7 @@ def export_cohort(run_dir: Path, out: Path, dataset: Optional[str] = None) -> in
         link = links(Gate(dataset).con, dataset).get(lvl)
         if link is not None:
             df = df.merge(link.astype({c: "Int64" for c in link.columns}), on=key, how="left")
-    cols = [u[l]["id"] for l in reversed(LEVELS) if l in u and u[l]["id"] in df.columns]
+    cols = [u[l]["id"] for l in reversed(list(u)) if u[l]["id"] in df.columns]
     df = df[cols + ["index_time"]].sort_values(key)
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out, index=False)
