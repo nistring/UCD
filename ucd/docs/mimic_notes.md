@@ -1,0 +1,42 @@
+## MIMIC-IV 3.1 documentation notes (public documentation, no data values)
+- Single US academic center (BIDMC), 2008–2022. Dates are shifted per patient into 2100–2220, so only within-patient intervals are meaningful.
+- **Keys.** `subject_id` = patient; `hadm_id` = hospital admission; `stay_id` = ICU stay. `icu.icustays` already merges contiguous ICU transfers into one stay.
+- **Unit of analysis.** "First ICU stay per patient" = `QUALIFY row_number() OVER (PARTITION BY subject_id ORDER BY intime) = 1` on `icu.icustays` (65,366 stays in v3.1). "First ICU stay of the hospitalization" partitions by `hadm_id` instead and keeps more stays; protocols that say "first ICU stay" without qualification mean per patient.
+- **Age.** `hosp.patients.anchor_age` is the age in `anchor_year`. Age at admission = `anchor_age + (year(admittime) - anchor_year)`. All patients are ≥ 18; anchor_age is capped at 91.
+- **Mortality.**
+  - `hosp.admissions.hospital_expire_flag` / `deathtime` = in-hospital death. `deathtime` is recorded for nearly every in-hospital death (missing in about 0.1%), so ICU death = `deathtime` between ICU `intime` and `outtime` (optionally with a short grace period after `outtime`). Dropping the time condition turns ICU death into hospital death, about 1.5 times as many deaths.
+  - `hosp.patients.dod` adds out-of-hospital deaths from state records, up to 1 year after the last discharge. A 28- or 90-day outcome must use `dod` (date only: treat as the end of that day) with `deathtime` when the death was in hospital; `hospital_expire_flag` alone misses deaths after discharge.
+- **Labs.**
+  - `hosp.labevents` (`itemid` → `hosp.d_labitems`; `valuenum`, `valueuom`, `charttime`) has no `stay_id`.
+  - Join to ICU stays on `hadm_id` or `subject_id` plus time.
+  - The same analyte often has a chemistry and a blood-gas item: potassium 50971 (chemistry) and 50822 (whole blood / blood gas); bicarbonate 50882 (chemistry) and 50803 (calculated, blood gas); pH 50820 (blood gas); creatinine 50912. Pool chemistry and blood-gas items unless the protocol names one.
+- **Charted data.**
+  - `icu.chartevents` (`itemid` → `icu.d_items`) holds vitals, GCS, ventilator settings and weights. It is very large: always filter by itemid.
+  - Values are in `valuenum`; `warning` / `error` flags exist.
+- **Infusions** are in `icu.inputevents`:
+  - `starttime`, `endtime`, `amount`, `rate`, `rateuom`, `patientweight`;
+  - vasopressors are itemids in `d_items` with linksto=inputevents;
+  - blood products are also here;
+  - `amount` is in `amountuom` (mL or L); an infusion spans `starttime`–`endtime`, so a fluid balance over a window should prorate the amount to the overlap with the window.
+- **Urine and other outputs** are in `icu.outputevents` (`value` in mL, `charttime`). **ICU procedures** (ventilation, dialysis, lines) are in `icu.procedureevents` with `starttime`/`endtime`.
+- **Medications outside the ICU:** `hosp.emar` / `emar_detail` (administrations), `hosp.prescriptions`, `hosp.pharmacy`.
+- **Diagnoses:** `hosp.diagnoses_icd` (`icd_version` 9 or 10; codes have no dots; `seq_num` = priority), dictionary `hosp.d_icd_diagnoses`. **Procedures:** `hosp.procedures_icd`. Diagnoses are coded at discharge, so "before ICU admission" can only be approximated by the index hospitalization's codes or by earlier hospitalizations.
+- **Microbiology:** `hosp.microbiologyevents` (`charttime` / `chartdate`, `spec_type_desc`, `org_name`), used for suspected infection.
+- **Transfers:** `hosp.transfers` (`eventtype`: admit / transfer / discharge / ED; `careunit`).
+- **Weight:** `icu.chartevents` admission weight items, or `inputevents.patientweight`; `concept.weight_durations` gives a weight valid over a time interval.
+
+## Tested concept tables (`concept.*`, built on first use from the public mimic-code SQL; `python -m ucd.concepts build mimic` builds them ahead)
+These implement standard definitions once, so a design uses them instead of re-deriving KDIGO or ventilation from raw events. Column semantics (public documentation):
+- `concept.kdigo_creatinine` (`stay_id`, `charttime`, `creat`, `creat_low_past_48hr`, `creat_low_past_7day`): every creatinine from 7 days before ICU admission to ICU discharge, with the lowest earlier value in the prior 48 h and prior 7 days. The 7-day low is the KDIGO baseline; it is NULL when no earlier value exists.
+- `concept.kdigo_uo` (`stay_id`, `charttime`, `weight`, `urineoutput_6hr/12hr/24hr`, `uo_rt_6hr/12hr/24hr`, `uo_tm_6hr/12hr/24hr`): urine output summed over trailing 6/12/24 h windows, the rate in mL/kg/h, and the hours of urine charting the window actually covers (`uo_tm_*`).
+- `concept.kdigo_stages` (`stay_id`, `charttime`, `aki_stage_creat`, `aki_stage_uo`, `aki_stage_crrt`, `aki_stage`, `aki_stage_smoothed`): the KDIGO stage at every creatinine or urine-output timestamp. `aki_stage_creat` uses the 7-day low (stage 3 = ≥ 3.0× the low, or ≥ 4.0 mg/dL with a ≥ 0.3 rise in 48 h or ≥ 1.5× the low); `aki_stage_uo` is 0 in the first 6 h of the stay and requires the window to be fully charted (`uo_tm_24hr >= 24` for the 24 h rule, `uo_tm_12hr >= 12` for anuria); `aki_stage_crrt` = 3 whenever CRRT settings are charted; `aki_stage` is the maximum of the three. Rows exist before `intime` (creatinine look-back), so restrict to `charttime BETWEEN intime AND outtime` when looking for events during the stay.
+- `concept.crrt` (`stay_id`, `charttime`, `crrt_mode`, settings…): CRRT machine settings charted in the ICU; `crrt_mode IS NOT NULL` marks CRRT running.
+- `concept.rrt` (`stay_id`, `charttime`, `dialysis_present`, `dialysis_active`, `dialysis_type`): any renal replacement therapy from chart, infusion and procedure records. `dialysis_type` ∈ CRRT / CVVHD / CVVHDF / IHD / SCUF / Peritoneal, NULL for untyped setting records; `dialysis_active = 1` = therapy running (catheter care alone is `present` but not `active`).
+- `concept.ventilation` (`stay_id`, `starttime`, `endtime`, `ventilation_status`): episodes of InvasiveVent, NonInvasiveVent, HFNC, SupplementalOxygen, Tracheostomy, None. Positive-pressure ventilation = InvasiveVent or NonInvasiveVent.
+- `concept.bg` (`subject_id`, `hadm_id`, `charttime`, `specimen`, `po2`, `pco2`, `ph`, `fio2`, `pao2fio2ratio`, …): blood gases with the FiO2 matched from ventilator settings; `specimen` is 'ART.', 'VEN.', 'MIX.', 'CENTRAL VENOUS.' or NULL (unlabelled). `pao2fio2ratio` is NULL when no FiO2 could be matched. Join to a stay on `hadm_id` plus time (no `stay_id`).
+- `concept.weight_durations` (`stay_id`, `starttime`, `endtime`, `weight`, `weight_type`): a weight valid over an interval; the latest row starting before a timestamp is the weight at that time.
+- `concept.sepsis3` (`stay_id`, `suspected_infection_time`, `sofa_time`, `sofa_score`, `sepsis3`): Sepsis-3 at ICU level; "sepsis before time T" = both times ≤ T and `sepsis3` true.
+- `concept.norepinephrine`, `concept.vasopressin`, … (`stay_id`, `starttime`, `endtime`, `vaso_rate`, `vaso_amount`): vasopressor infusions with rates; `concept.norepinephrine_equivalent_dose` when built.
+- `concept.icustay_detail` (`admission_age`, `gender`, `dod`, `hospstay_seq`, `icustay_seq`, `first_hosp_stay`, `first_icu_stay`): note `first_icu_stay` is per **hospitalization**, not per patient.
+- `concept.charlson` (`hadm_id`, `charlson_comorbidity_index`, components), `concept.sofa` (hourly SOFA per stay with component scores), `concept.first_day_*` (first-24-h summaries).
+- Lab concepts (`complete_blood_count`, `chemistry`, `coagulation`, ...) have one row per specimen with `hadm_id` and `charttime`, not `stay_id`: join to the ICU stay on `hadm_id` and restrict `charttime` to the stay's window.

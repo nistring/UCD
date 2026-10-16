@@ -1,0 +1,64 @@
+# Topic packs (0.9.0): what a topic needs on top of the general agent. A pack applies when its `match` patterns
+# (regular expressions, case-insensitive) occur in the request or protocol and the dataset is listed.
+#   concepts   tested building blocks the planner should use (concept.<name>, see ucd/concepts.py)
+#   notes      how to use them; shown to the planner
+#   questions  definition choices intake asks the user (2-4 options, recommended = 0-based); the topic's known
+#              ambiguities are exposed, never silently decided
+#   check      critic rule: designs that use none of `uses` get a warning (the definition was re-derived by hand)
+aki:
+  label: Acute kidney injury (KDIGO)
+  match: ['acute kidney injury', '\baki\b', 'kdigo']
+  datasets: [mimic]
+  concepts: [kdigo_creatinine, kdigo_uo, kdigo_stages, creatinine_baseline, crrt]
+  notes: >-
+    KDIGO stages per measurement time are in concept.kdigo_stages (aki_stage_creat, aki_stage_uo, aki_stage_crrt,
+    aki_stage, aki_stage_smoothed) with stay_id and charttime. The maximum stage in a window = max(aki_stage) over
+    charttime between index_time and index_time + window. The creatinine baselines are creat_low_past_48hr and
+    creat_low_past_7day (rolling minimum before each value); concept.creatinine_baseline holds a pre-admission
+    estimate. Urine-output staging needs a weight and at least 6 h of data.
+  questions:
+    - question: "Which creatinine baseline defines AKI?"
+      options: ["Rolling minimum of the previous 7 days and 48 h (KDIGO concept)", "First creatinine of the ICU stay",
+                "Estimated pre-admission baseline (creatinine_baseline concept)"]
+      recommended: 0
+      why: "The baseline choice changes who has AKI more than any other definition detail."
+    - question: "Which KDIGO criteria count?"
+      options: ["Creatinine and urine output (and RRT)", "Creatinine only"]
+      recommended: 0
+      why: "Urine output adds many stage-1 and stage-2 cases but needs a recorded weight."
+  check:
+    uses: [kdigo_stages, kdigo_creatinine, kdigo_uo]
+    message: "AKI is staged without the tested KDIGO concepts: check the baseline window and the 48 h / 7 day rules"
+
+sepsis:
+  label: Sepsis (Sepsis-3)
+  match: ['sepsis', 'septic', '\bsofa\b', 'suspected infection']
+  datasets: [mimic]
+  concepts: [suspicion_of_infection, sofa, sepsis3, first_day_sofa, vasoactive_agent, norepinephrine_equivalent_dose]
+  notes: >-
+    concept.sepsis3 gives one row per ICU stay meeting Sepsis-3: suspected infection (antibiotic plus culture, in
+    concept.suspicion_of_infection) with SOFA >= 2 from 48 h before to 24 h after the suspicion time; columns
+    suspected_infection_time, sofa_time, sofa_score and the components. concept.sofa is hourly SOFA per stay
+    (24-h rolling worst values); concept.first_day_sofa is the first-day score. Vasopressors: concept.vasoactive_agent
+    (one row per infusion period) and concept.norepinephrine_equivalent_dose. Septic shock needs vasopressors and a
+    lactate > 2 mmol/L; its onset time is ambiguous (agents disagreed in earlier runs), so state the definition used.
+    concept.sofa and concept.first_day_sofa implement the original SOFA score (SOFA-1) only. SOFA-2 is a different,
+    revised scoring system (other organ criteria and thresholds), not a second SOFA measurement: when a protocol asks
+    for SOFA-2, build it from the raw tables following the protocol's definition, and keep it separate from SOFA-1.
+  critic_notes: >-
+    SOFA-1 and SOFA-2 are two different scoring systems (the original SOFA and its revised version with other organ
+    criteria), not two measurement times of one score; never suggest computing "SOFA-2" as SOFA 24 hours later.
+    concept.sofa / concept.first_day_sofa are SOFA-1 only, so a SOFA-2 must be built from the protocol's definition.
+  questions:
+    - question: "How is sepsis onset defined?"
+      options: ["Sepsis-3: suspected infection with SOFA >= 2 from -48 h to +24 h (sepsis3 concept)",
+                "Time of suspected infection only", "First SOFA >= 2 in the ICU"]
+      recommended: 0
+      why: "Onset definitions select different patients and shift time zero."
+    - question: "What baseline SOFA is assumed before the infection?"
+      options: ["0 when unknown (the Sepsis-3 convention)", "Lowest SOFA in the 24 h before suspicion"]
+      recommended: 0
+      why: "Sepsis-3 needs an increase of 2 or more from baseline."
+  check:
+    uses: [sepsis3, suspicion_of_infection, sofa, first_day_sofa]
+    message: "Sepsis or SOFA is derived without the tested concepts: check the infection window and the SOFA components"

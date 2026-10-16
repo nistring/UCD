@@ -1,0 +1,39 @@
+# Dataset registry: everything UCD needs to know to work on a dataset. MIMIC-IV is the first entry; to add
+# another dataset (e.g. eICU-CRD, a hospital's own extract):
+#   1. put its tables as <source>/<module>/<table>.csv or .csv.gz (or parquet as <parquet>/<module>/<table>.parquet)
+#   2. add an entry below (name, label, description, source, units; lookups if it has dictionary tables)
+#   3. optionally write ucd/docs/<name>_notes.md (documentation the planner reads in the Data Card)
+#   4. python -m ucd.build_parquet <name>      then      python -m ucd "question" --dataset <name>
+#
+# Fields
+#   label, description   shown to the intake and planner models (public documentation only, never data values)
+#   source               raw tables <module>/<table>.csv[.gz]; first existing path wins; env override <ENV>_SOURCE
+#   parquet_env          env var pointing at the parquet folder (default .kcd_cache/parquet/<name>)
+#   units                unit levels of analysis, fine -> coarse: the id column and a table holding that id plus
+#                        the ids of the coarser levels (used to compare cohorts with a ground truth)
+#   lookups              dictionary tables for the lookup action: kind -> [table, columns shown, columns searched]
+#                        (without it, every table named d_* is searched)
+#   concepts             optional library of tested SQL (one CREATE TABLE <derived>.<name> AS SELECT per file) and
+#                        the schema renames; the planner uses them as concept.<name> (ucd/concepts.py)
+mimic:
+  label: MIMIC-IV 3.1
+  description: >-
+    US single-centre EHR (Beth Israel Deaconess, Boston, 2008-2022): ICU stays and hospital admissions of adults
+    (anchor_age >= 18). Modules hosp (admissions, labs, diagnoses, prescriptions ...) and icu (icustays,
+    chartevents, inputevents ...). In-hospital death (hospital_expire_flag, deathtime) and date of death up to
+    1 year after discharge (patients.dod). Dates are shifted per patient, so only within-patient intervals are
+    meaningful.
+  source: [physionet/mimiciv/3.1, ../physionet/mimiciv/3.1, ~/workspace/physionet/mimiciv/3.1]
+  parquet_env: UCD_MIMIC_DIR
+  units:
+    icu_stay:  {id: stay_id,    table: icu.icustays}
+    admission: {id: hadm_id,    table: hosp.admissions}
+    patient:   {id: subject_id, table: hosp.patients}
+  lookups:
+    items: [icu.d_items, [itemid, label, abbreviation, linksto, category, unitname], [label, abbreviation, category]]
+    labs:  [hosp.d_labitems, [itemid, label, fluid, category], [label, fluid, category]]
+    dx:    [hosp.d_icd_diagnoses, [icd_code, icd_version, long_title], [long_title, icd_code]]
+    proc:  [hosp.d_icd_procedures, [icd_code, icd_version, long_title], [long_title, icd_code]]
+  concepts:                     # tested SQL building blocks, usable as concept.<name> (ucd/concepts.py)
+    sql_dir: third_party/mimic-code/concepts_duckdb      # public mimic-code DuckDB concepts
+    schemas: {mimiciv_hosp: hosp, mimiciv_icu: icu, mimiciv_derived: concept}

@@ -1,0 +1,248 @@
+# Hidden external reference papers for the cohort-design agent evaluation.
+# Every numeric value below is copied from the abstract or the full text and
+# carries a verbatim quote. A value that could not be verified is null.
+# Verification log: eval/papers_notes.md
+# Source access: "abstract" = PubMed abstract only (full text paywalled);
+#                "full text" = PMC / publisher full text was read.
+
+t1_aki:
+  question: "KDIGO AKI stage within the first 7 ICU days vs in-hospital mortality, adult ICU"
+  citation: "Hoste EAJ, Bagshaw SM, Bellomo R, Cely CM, Colman R, Cruz DN, et al.; Kellum JA. Epidemiology of acute kidney injury in critically ill patients: the multinational AKI-EPI study. Intensive Care Med. 2015;41(8):1411-1423."
+  doi: "10.1007/s00134-015-3934-7"
+  pmid: "26162677"
+  source_access: "abstract (Springer full text paywalled; no OA copy found via Europe PMC/Unpaywall)"
+  journal_tier: "Intensive Care Medicine (ESICM flagship; IF ~20 in recent years; >2000 citations)"
+  population: "Prospective international cross-sectional study, 97 centres on multiple continents; ICU patients followed during the first week of ICU admission, outcomes at hospital discharge. Detailed inclusion/exclusion criteria and enrolment dates not verified (full text paywalled)."
+  n_cohort: 1802
+  outcome_definition: "Hospital mortality (vital status at hospital discharge)"
+  outcome_rate: null   # overall hospital mortality not reported in the abstract
+  exposure_definition: "Maximum KDIGO AKI stage (serum creatinine + urine output; 'complete KDIGO criteria') during the first week of ICU admission"
+  key_results:
+    - {name: "AKI incidence (any KDIGO stage, first ICU week)", value: 0.573, ci: [0.550, 0.596], quote: "A total of 1032 ICU patients out of 1802 [57.3%; 95% confidence interval (CI) 55.0-59.6] had AKI."}
+    - {name: "Adjusted OR hospital death, stage 1 vs no AKI", value: 1.679, ci: [0.890, 3.169], adjusted: true, quote: "odds ratio of stage 1 = 1.679 (95% CI 0.890-3.169; p = 0.109)"}
+    - {name: "Adjusted OR hospital death, stage 2 vs no AKI", value: 2.945, ci: [1.382, 6.276], adjusted: true, quote: "stage 2 = 2.945 (95% CI 1.382-6.276; p = 0.005)"}
+    - {name: "Adjusted OR hospital death, stage 3 vs no AKI", value: 6.884, ci: [3.876, 12.228], adjusted: true, quote: "stage 3 = 6.884 (95% CI 3.876-12.228; p < 0.001)"}
+    - {name: "eGFR <60 at hospital discharge, AKI vs no AKI", value: [0.477, 0.148], ci: [[0.436, 0.517], [0.119, 0.182]], quote: "estimated glomerular filtration rate less than 60 mL/min/1.73 m(2) in 47.7% (95% CI 43.6-51.7) versus 14.8% (95% CI 11.9-18.2) in those without AKI, p < 0.001."}
+  model: "Multivariable logistic regression for hospital mortality ('when adjusted for other variables'); exact covariate list not verified (full text paywalled)."
+  design_checklist:
+    - "adult ICU patients"
+    - "AKI staged with full KDIGO criteria: serum creatinine AND urine output"
+    - "exposure = maximum KDIGO stage reached within the first 7 days of ICU admission"
+    - "AKI stage as a categorical exposure (no AKI / stage 1 / 2 / 3), with no AKI as reference"
+    - "outcome = mortality at hospital discharge"
+    - "multivariable logistic regression adjusting for severity / confounders"
+    - "a baseline creatinine reference must be defined (pre-admission value or a surrogate)"
+    - "exclude patients with pre-existing end-stage kidney disease on dialysis (standard for KDIGO AKI studies; exact AKI-EPI wording not verified)"
+  caveats_vs_mimic: "AKI-EPI was prospective, with hourly urine output collected for the study and site-defined baselines. MIMIC-IV urine output charting is incomplete and baseline creatinine often has to be imputed, so AKI incidence (especially UO-only stage 1) may differ. AKI-EPI pooled 97 centres worldwide (many outside the US); MIMIC-IV is one US academic centre (BIDMC) with a different case mix (many cardiac surgery patients, for example). The adjusted ORs have wide CIs (n=1802), so a MIMIC estimate of stage 1 OR ~1.3-2 and stage 3 OR ~4-8 would be compatible."
+
+t2_sofa:
+  question: "Day-1 SOFA predicting in-hospital mortality in adult ICU patients with suspected infection"
+  citation: "Raith EP, Udy AA, Bailey M, McGloughlin S, MacIsaac C, Bellomo R, Pilcher DV; ANZICS Centre for Outcomes and Resource Evaluation (CORE). Prognostic Accuracy of the SOFA Score, SIRS Criteria, and qSOFA Score for In-Hospital Mortality Among Adults With Suspected Infection Admitted to the Intensive Care Unit. JAMA. 2017;317(3):290-300."
+  doi: "10.1001/jama.2016.20328"
+  pmid: "28114553"
+  source_access: "abstract + JAMA full text (main text read through jamanetwork.com; supplement not read)"
+  journal_tier: "JAMA (IF ~60-100)"
+  population: "Retrospective cohort, ANZICS Adult Patient Database, 182 ICUs in Australia and New Zealand, 2000-2015. Admissions aged >=17 y with an infection-related primary ICU admission diagnosis (ANZICS-modified APACHE III codes). Excluded: repeat ICU admissions in the same hospital episode, transfers to another ICU, and patients with all score components missing."
+  n_cohort: 184875
+  outcome_definition: "In-hospital mortality (primary); secondary composite: in-hospital death or ICU LOS >=3 days"
+  outcome_rate: 0.187
+  exposure_definition: "SOFA score from physiological/laboratory values recorded within the first 24 h of ICU admission; baseline SOFA assumed 0 (so 'increase >=2' = day-1 SOFA >=2); missing components score 0; cardiovascular component estimated without vasopressor dose"
+  key_results:
+    - {name: "In-hospital mortality, overall", value: 0.187, ci: null, quote: "a total of 34 578 patients (18.7%) died in the hospital"}
+    - {name: "Proportion with SOFA increase >=2", value: 0.901, ci: null, quote: "SOFA score increased by 2 or more points in 90.1%"}
+    - {name: "Crude AUROC SOFA for in-hospital mortality", value: 0.753, ci: [0.750, 0.757], ci_level: 0.99, adjusted: false, quote: "SOFA demonstrated significantly greater discrimination for in-hospital mortality (crude AUROC, 0.753 [99% CI, 0.750-0.757])"}
+    - {name: "Crude AUROC SIRS criteria", value: 0.589, ci: [0.585, 0.593], ci_level: 0.99, adjusted: false, quote: "than SIRS criteria (crude AUROC, 0.589 [99% CI, 0.585-0.593])"}
+    - {name: "Crude AUROC qSOFA", value: 0.607, ci: [0.603, 0.611], ci_level: 0.99, adjusted: false, quote: "or qSOFA (crude AUROC, 0.607 [99% CI, 0.603-0.611])"}
+    - {name: "Adjusted AUROC SOFA (baseline-risk model + SOFA)", value: 0.815, ci: [0.811, 0.818], ci_level: 0.99, adjusted: true, quote: "SOFA (AUROC, 0.815 [99% CI, 0.811-0.818])"}
+    - {name: "Adjusted AUROC SIRS", value: 0.755, ci: [0.752, 0.759], ci_level: 0.99, adjusted: true, quote: "SIRS criteria (AUROC, 0.755 [99% CI, 0.752-0.759])"}
+    - {name: "Adjusted AUROC qSOFA", value: 0.762, ci: [0.758, 0.765], ci_level: 0.99, adjusted: true, quote: "qSOFA (AUROC, 0.762 [99% CI, 0.758-0.765]) (Table 2; Figure 3B shows 0.763)"}
+    - {name: "In-hospital mortality, SOFA increase >=2 vs <2", value: [0.202, 0.044], ci: null, quote: "The in-hospital mortality of patients who had an increase from baseline in SOFA score of 2 or more was 20.2% ... 4.4% (793 of 18 228 patients)"}
+  model: "Crude AUROC of each score; adjusted analysis = hierarchical logistic regression baseline-risk model (sites as random effect) with ICU size/type/location, admission source, month/day/hour of admission, age, sex, comorbidities, pregnancy, diabetes, Indigenous status and treatment limitations, then the score added; AUROC of the combined model reported."
+  design_checklist:
+    - "adults (>=17-18 y)"
+    - "suspected infection at ICU admission (infection-related admission diagnosis, or antibiotics + cultures as a proxy)"
+    - "first ICU admission of the hospital stay only (exclude same-episode readmissions)"
+    - "exclude transfers to another ICU/hospital (unknown outcome)"
+    - "SOFA computed from the first 24 h of ICU admission"
+    - "baseline SOFA assumed 0; missing components scored 0"
+    - "outcome = in-hospital mortality"
+    - "discrimination reported as AUROC, compared against SIRS and qSOFA"
+    - "adjusted analysis: baseline-risk model + score"
+  caveats_vs_mimic: "ANZICS identifies infection from the admission diagnosis; MIMIC-IV studies usually use antibiotic + culture timing (Sepsis-3 / Seymour), which selects a different and often later-infected population. ANZICS SOFA had no vasopressor doses (cardiovascular component approximated), while MIMIC-IV has full infusion data and usually uses worst values, which tends to raise AUROC. Mortality and case mix differ (ANZICS 2000-2015 binational vs single US centre 2008-2019). AUROC ~0.70-0.80 in MIMIC would be consistent."
+
+t3_dysnatremia:
+  question: "Dysnatremia at ICU admission vs in-hospital mortality"
+  citation: "Funk GC, Lindner G, Druml W, Metnitz B, Schwarz C, Bauer P, Metnitz PG. Incidence and prognosis of dysnatremias present on ICU admission. Intensive Care Med. 2010;36(2):304-311."
+  doi: "10.1007/s00134-009-1692-0"
+  pmid: "19847398"
+  source_access: "abstract (full text paywalled); exclusion counts from a secondary commentary only, not used as numbers"
+  journal_tier: "Intensive Care Medicine (IF ~20 in recent years)"
+  population: "Retrospective registry study, 77 medical, surgical and mixed ICUs in Austria (ASDI database), adults admitted consecutively 1998-2007. Per a secondary commentary (not verified in the full text): readmissions, age <18, and patients missing hospital outcome / valid SAPS II / admission sodium were excluded."
+  n_cohort: 151486
+  outcome_definition: "Hospital mortality"
+  outcome_rate: null   # overall hospital mortality not reported in the abstract
+  exposure_definition: "Serum sodium on ICU admission, in categories: normal 135-145; borderline hypo 130-<135, mild hypo 125-<130, severe hypo <125; borderline hyper >145-150, mild hyper >150-155, severe hyper >155 mmol/L"
+  key_results:
+    - {name: "Normonatremia on admission", value: 0.754, ci: null, quote: "Most patients (114,170, 75.4%) had normal sodium levels (135 < or = Na < or = 145 mmol/L) on ICU admission."}
+    - {name: "Prevalence borderline / mild / severe hyponatremia", value: [0.138, 0.027, 0.012], ci: null, quote: "The frequencies of borderline (130 < or = Na < 135 mmol/L), mild (125 < or = Na < 130 mmol/L), and severe hyponatremia (Na < 125 mmol/L) were 13.8%, 2.7%, and 1.2%, respectively."}
+    - {name: "Prevalence borderline / mild / severe hypernatremia", value: [0.051, 0.012, 0.006], ci: null, quote: "The frequencies of borderline (145 < Na < or = 150 mmol/L), mild (150 < Na < or = 155 mmol/L), and severe hypernatremia (Na > 155 mmol/L) were 5.1%, 1.2%, and 0.6%, respectively."}
+    - {name: "Adjusted OR hospital death, borderline hyponatremia", value: 1.32, ci: [1.25, 1.39], adjusted: true, quote: "Odds ratios and 95% confidence interval (CI) for borderline, mild, and severe hyponatremia were 1.32 (1.25-1.39), 1.89 (1.71-2.09), and 1.81 (1.56-2.10), respectively."}
+    - {name: "Adjusted OR hospital death, mild hyponatremia", value: 1.89, ci: [1.71, 2.09], adjusted: true, quote: "(same sentence as above)"}
+    - {name: "Adjusted OR hospital death, severe hyponatremia", value: 1.81, ci: [1.56, 2.10], adjusted: true, quote: "(same sentence as above)"}
+    - {name: "Adjusted OR hospital death, borderline hypernatremia", value: 1.48, ci: [1.36, 1.61], adjusted: true, quote: "Odds ratios and 95% CI for borderline, mild, and severe hypernatremia were 1.48 (1.36-1.61), 2.32 (1.98-2.73), and 3.64 (2.88-4.61), respectively."}
+    - {name: "Adjusted OR hospital death, mild hypernatremia", value: 2.32, ci: [1.98, 2.73], adjusted: true, quote: "(same sentence as above)"}
+    - {name: "Adjusted OR hospital death, severe hypernatremia", value: 3.64, ci: [2.88, 4.61], adjusted: true, quote: "(same sentence as above)"}
+  model: "Multiple logistic regression for hospital mortality with normonatremia as reference; adjusted for severity of illness (SAPS-based risk adjustment; exact covariate set not verified, full text paywalled)."
+  design_checklist:
+    - "adults >=18"
+    - "first ICU admission only (exclude readmissions)"
+    - "exposure = first / admission serum sodium at ICU admission"
+    - "sodium categorized into graded hypo- and hypernatremia bands with 135-145 mmol/L as reference"
+    - "outcome = hospital mortality"
+    - "multivariable logistic regression adjusted for severity score (SAPS)"
+    - "exclude patients missing admission sodium or hospital outcome"
+    - "mixed medical/surgical ICU population"
+  caveats_vs_mimic: "Austrian national registry 1998-2007 vs single US centre 2008-2019. 'Admission sodium' in MIMIC-IV must be operationalised (first value within +/-6-24 h of ICU intime; blood gas vs lab chemistry). Glucose correction and lab method may shift categories. Severity adjustment in MIMIC usually uses SOFA/OASIS/SAPS II rather than registry SAPS. The direction and the dose-response (higher OR for more severe hypernatremia) should replicate; exact ORs may differ."
+
+t4_ne_timing:
+  question: "Delay in norepinephrine initiation in septic shock vs mortality"
+  citation: "Bai X, Yu W, Ji W, Lin Z, Tan S, Duan K, Dong Y, Xu L, Li N. Early versus delayed administration of norepinephrine in patients with septic shock. Crit Care. 2014;18(5):532."
+  doi: "10.1186/s13054-014-0532-y"
+  pmid: "25277635"
+  pmcid: "PMC4194405"
+  source_access: "full text (Europe PMC)"
+  journal_tier: "Critical Care (IF ~9-15)"
+  population: "Retrospective cohort, two general surgical ICUs of one tertiary hospital in China (Jinling Hospital, Nanjing), January 2011-December 2012; adults >=18 with septic shock (2001 SCCM/ESICM/ACCP/ATS/SIS definition: sepsis-induced hypotension SBP <90, SBP drop >=40 or MAP <65 persisting despite 30 mL/kg crystalloid, or only transiently improved <1 h); no other obvious cause of shock. All received norepinephrine as the first vasopressor."
+  n_cohort: 213
+  outcome_definition: "28-day mortality"
+  outcome_rate: 0.376
+  exposure_definition: "Time (h) from septic shock onset to initial norepinephrine; continuous, and dichotomised Early-NE (<2 h) vs Late-NE (>=2 h)"
+  key_results:
+    - {name: "28-day mortality overall", value: 0.376, ci: null, quote: "The 28-day mortality was 37.6% overall."}
+    - {name: "Mean time to NE initiation (h)", value: 3.1, ci: null, quote: "The average time to initial norepinephrine administration was 3.1 ± 2.5 hours."}
+    - {name: "Unadjusted OR death per hour of NE delay", value: 1.20, ci: [1.07, 1.35], adjusted: false, quote: "The OR of death was 1.20 per hour delay (1.07 to 1.35, P =0.002), that is, every 1-hour delay was associated with a 20.4% increased probability of death."}
+    - {name: "Adjusted OR death per hour of NE delay", value: 1.392, ci: [1.138, 1.702], adjusted: true, quote: "Table 5 ... Time to initial norepinephrine administration (h) 1.392 1.138–1.702 0.003"}
+    - {name: "28-day mortality Early-NE (<2 h) vs Late-NE (>=2 h)", value: [0.291, 0.433], ci: null, quote: "The 28-day mortality was 29.1% in the Early-NE group (within two hours) and 43.3% in the Late-NE group (after two hours)."}
+    - {name: "Absolute mortality increase per hour delay in first 6 h", value: 0.053, ci: null, quote: "Every 1-hour delay in norepinephrine initiation during the first 6 hours after septic shock onset was associated with a 5.3% increase in mortality."}
+    - {name: "Group sizes Early-NE / Late-NE", value: [86, 127], ci: null, quote: "Table 3 ... <2 hours (number = 86) ≥2 hours (number = 127)"}
+  model: "Univariate logistic regression of 28-day mortality on time to NE (continuous); multivariable logistic regression with time to NE, time to first antimicrobial, lactate at shock onset, APACHE II, effective antimicrobial therapy and IV fluid volume in first 6 h (Hosmer-Lemeshow P=0.627)."
+  alternate_reference:
+    citation: "Beck V, Chateau D, Bryson GL, Pisipati A, Zanotti S, Parrillo JE, Kumar A; CATSS Database Research Group. Timing of vasopressor initiation and mortality in septic shock: a cohort study. Crit Care. 2014;18(3):R97."
+    doi: "10.1186/cc13868"
+    pmid: "24887489"
+    why: "Larger multicentre (28 ICUs, Canada/USA/Saudi Arabia) check on Bai; exposure is any vasopressor/inotrope (norepinephrine in ~2/3), outcome survival to hospital discharge."
+    key_results:
+      - {name: "n analysed", value: 6514, quote: "Of these, 6,514 were suitable for analysis."}
+      - {name: "Unadjusted hospital mortality", value: 0.53, quote: "The overall unadjusted hospital mortality rate was 53%."}
+      - {name: "Median time to vasopressor (h)", value: 3, iqr: [1, 7.1], quote: "The median time to vasopressor initiation was 3 hours (25 to 75% range: 1 to 7.1 hours)."}
+      - {name: "Adjusted OR hospital death per hour vasopressor delay", value: 1.02, ci: [1.01, 1.03], adjusted: true, quote: "After adjustment, only a weak correlation between vasopressor delay and hospital mortality was found (adjusted OR 1.02/hr, 95% CI 1.01 to 1.03, P <0.001). This weak effect was entirely driven by the group of patients with the longest delays (>14.1 hours)."}
+  design_checklist:
+    - "adults >=18"
+    - "septic shock defined by sepsis + fluid-refractory hypotension (SBP <90 or MAP <65 despite ~30 mL/kg)"
+    - "explicit time zero = septic shock (hypotension) onset"
+    - "exposure = hours from shock onset to first norepinephrine; continuous and/or <2 h vs >=2 h"
+    - "norepinephrine as the first vasopressor"
+    - "outcome = 28-day mortality (or hospital mortality)"
+    - "adjust for severity (APACHE II/SOFA), lactate, time to antibiotics, fluid volume"
+    - "exclude other causes of shock"
+    - "watch for immortal-time / indication bias (sicker patients get NE earlier)"
+  caveats_vs_mimic: "Bai is small (n=213), single-centre, surgical ICU (abdominal sepsis) in China, with a very large effect (aOR 1.39/h). The multicentre Beck/CATSS study found only a weak effect (aOR 1.02/h). A MIMIC-IV replication will likely sit between the two, and is sensitive to how shock onset is timestamped (charted MAP <65 vs fluid bolus completion) and to patients started on NE before ICU admission (ED/OR), which MIMIC captures poorly."
+
+t5_readmission:
+  question: "ICU readmission within the same hospitalization, rate and discharge predictors"
+  citation: "Kramer AA, Higgins TL, Zimmerman JE. Intensive care unit readmissions in U.S. hospitals: patient characteristics, risk factors, and outcomes. Crit Care Med. 2012;40(1):3-10."
+  doi: "10.1097/CCM.0b013e31822d751e"
+  pmid: "21926603"
+  source_access: "abstract only (LWW full text paywalled, HTTP 402)"
+  journal_tier: "Critical Care Medicine (SCCM flagship; IF ~7-9)"
+  population: "Retrospective cohort, 97 ICUs/cardiac care units at 35 US hospitals (multicentre US clinical ICU database; exact database name not verified), first ICU admissions 2001-2009; analysis of patients discharged alive from the first ICU stay and eligible for readmission. Detailed exclusions not verified."
+  n_cohort: 229375
+  outcome_definition: "ICU readmission during the same hospital stay (after the initial ICU admission); secondary: case-mix adjusted hospital mortality and LOS"
+  outcome_rate: 0.061
+  exposure_definition: "Patient characteristics at ICU admission and ICU discharge: location before ICU, age, comorbidities, diagnosis, ICU LOS, physiologic abnormalities at ICU discharge, discharge to step-down unit"
+  key_results:
+    - {name: "ICU readmission rate (same hospitalization)", value: 0.061, ci: null, quote: "Among 229,375 first admissions that met inclusion criteria, 13,980 (6.1%) were eventually readmitted."}
+    - {name: "Adjusted hospital mortality, readmitted vs not (fold increase)", value: 4.0, ci: null, adjusted: true, quote: "After adjustment for risk factors, patients who were readmitted had a four-fold greater probability of hospital mortality and a 2.5-fold increase in hospital stay compared to patients without readmission."}
+    - {name: "Adjusted hospital LOS, readmitted vs not (fold increase)", value: 2.5, ci: null, adjusted: true, quote: "(same sentence as above)"}
+    - {name: "Predictors with the highest multivariable ORs (qualitative)", value: null, ci: null, quote: "Risk factors associated with the highest multivariate odds ratio for unit readmission included location before intensive care unit admission, age, comorbid conditions, diagnosis, intensive care unit length of stay, physiologic abnormalities at intensive care discharge, and discharge to a step-down unit."}
+  model: "Multivariable logistic regression of readmission among patients discharged alive from the first ICU stay; case-mix adjusted outcomes = observed vs APACHE-predicted hospital mortality and LOS. Individual OR values not verified (full text paywalled)."
+  design_checklist:
+    - "adult ICU patients"
+    - "index = first ICU admission of the hospitalization"
+    - "denominator = patients discharged alive from the ICU (exclude ICU deaths)"
+    - "exclude patients with no readmission opportunity (e.g., discharged home/transferred out directly from the ICU)"
+    - "outcome = any ICU readmission during the same hospitalization"
+    - "predictors include pre-ICU location, age, comorbidities, diagnosis, ICU LOS, physiology at ICU discharge, discharge destination (step-down)"
+    - "multivariable logistic regression"
+    - "report hospital mortality in readmitted vs non-readmitted patients"
+  caveats_vs_mimic: "Kramer pooled 35 US hospitals (2001-2009) with APACHE-based case-mix adjustment and physiology at ICU discharge collected prospectively. MIMIC-IV is one academic centre; same-hospitalization readmission rates there are usually ~5-10% depending on whether transfers between ICUs count. 'Step-down' units are not distinguishable in MIMIC-IV transfers the same way. Exclusion of patients with DNR status or transfers differs. The rate (~6%) and the direction of predictors are the comparison targets; individual ORs are not available."
+
+t6_transfusion:
+  question: "Hemoglobin threshold at RBC transfusion in ICU patients, and transfusion vs mortality"
+  citation: "Vincent JL, Jaschinski U, Wittebole X, Lefrant JY, Jakob SM, Almekhlafi GA, Pellis T, Tripathy S, Rubatto Birri PN, Sakr Y; ICON Investigators. Worldwide audit of blood transfusion practice in critically ill patients. Crit Care. 2018;22(1):102."
+  doi: "10.1186/s13054-018-2018-9"
+  pmid: "29673409"
+  pmcid: "PMC5909204"
+  source_access: "full text (Europe PMC)"
+  journal_tier: "Critical Care (IF ~9-15)"
+  population: "Pre-planned sub-study of the ICON audit: 730 ICUs in 84 countries; all adult ICU admissions 8-18 May 2012 except admissions for routine postoperative surveillance; 9553 of 10,069 patients with complete transfusion data."
+  n_cohort: 9553
+  outcome_definition: "In-hospital mortality (also ICU mortality)"
+  outcome_rate: 0.223
+  exposure_definition: "RBC transfusion at any time during the ICU stay (time-dependent in Cox model, from the first unit). Transfusion trigger = lowest hemoglobin on the day of transfusion."
+  key_results:
+    - {name: "Hospital mortality overall", value: 0.223, ci: null, quote: "the overall ICU and hospital mortality rates were 16.2% and 22.3%, respectively."}
+    - {name: "Proportion transfused during ICU stay", value: 0.263, ci: null, quote: "2511 (26.3%) of these had received a transfusion, with considerable variation among geographic regions."}
+    - {name: "Mean lowest Hb on day of transfusion (g/dL), any time in ICU", value: 8.3, sd: 1.7, ci: null, quote: "The mean lowest hemoglobin on the day of transfusion was 8.3 ± 1.7 g/dL, but varied from 7.8 ± 1.4 g/dL in the Middle East to 8.9 ± 1.9 g/dL in Eastern Europe."}
+    - {name: "Mean lowest Hb on day of transfusion (g/dL), transfused on ICU admission day", value: 8.3, sd: 2.2, ci: null, quote: "The mean lowest hemoglobin concentration on the day of transfusion (transfusion trigger) for patients transfused on the day of admission to the ICU was 8.3 ± 2.2 g/dL"}
+    - {name: "Hospital mortality transfused vs non-transfused (crude)", value: [0.300, 0.196], ci: null, adjusted: false, quote: "Hospital mortality rates were higher in transfused than in non-transfused patients (30.0% vs. 19.6%, p < 0.001)"}
+    - {name: "Adjusted HR in-hospital death after transfusion (whole cohort)", value: 0.98, ci: [0.96, 1.00], adjusted: true, quote: "In the multivariable Cox analysis in the whole cohort, the relative risk of in-hospital death was slightly lower after transfusion (hazard ratio 0.98, confidence interval 0.96–1.00, p = 0.048)"}
+    - {name: "Share of patients with Hb <7 g/dL who were transfused", value: 0.62, ci: null, quote: "There were 62% of patients with hemoglobin levels < 7 g/dL who received a RBC transfusion during the ICU stay, whereas only 3.7% of patients with hemoglobin concentrations >13 g/dL received a transfusion"}
+    - {name: "Median RBC units transfused", value: 3, iqr: [2, 5], ci: null, quote: "The median number of units transfused was 3 (IQ 2–5)."}
+  model: "Extended Cox proportional hazards with transfusion as a time-dependent variable (time to first unit), discharge as a competing event; adjusted for age, sex, SAPS II and admission SOFA sub-scores, admission type, MV/RRT on admission, comorbidities, sepsis, admission Hb category, hospital/ICU organisational factors and geographic region."
+  design_checklist:
+    - "adults, all ICU admissions (exclude routine postoperative surveillance)"
+    - "transfusion trigger = lowest Hb on the calendar day of the transfusion"
+    - "exposure = any RBC transfusion during the ICU stay"
+    - "transfusion modelled as time-dependent (avoid immortal-time bias)"
+    - "outcome = in-hospital mortality"
+    - "adjust for admission severity (SAPS II / SOFA), admission Hb, sepsis, MV/RRT, comorbidities"
+    - "subgroups by admission severity (SAPS II / SOFA strata)"
+    - "report crude mortality transfused vs not alongside the adjusted HR"
+  caveats_vs_mimic: "ICON is a 10-day worldwide snapshot (2012) across 84 countries with wide regional variation in triggers (7.8-8.9 g/dL). MIMIC-IV is a single US centre after restrictive-threshold adoption (post TRICC/TRISS) with many cardiac-surgery patients, so its trigger may be lower (~7-7.5 g/dL) in medical ICUs and higher after cardiac surgery. Indication for transfusion (bleeding) is not recorded in either source. A MIMIC replication without time-dependent modelling would likely show a harmful association (crude effect)."
+
+t7_meld:
+  question: "MELD / MELD-Na discrimination for in-hospital (or ICU) mortality in ICU patients with cirrhosis"
+  citation: "Theocharidou E, Pieri G, Mohammad AO, Cheung M, Cholongitas E, Agarwal B, Burroughs AK. The Royal Free Hospital score: a calibrated prognostic model for patients with cirrhosis admitted to intensive care unit. Comparison with current models and CLIF-SOFA score. Am J Gastroenterol. 2014;109(4):554-562."
+  doi: "10.1038/ajg.2013.466"
+  pmid: "24492755"
+  pmcid: "PMC3978197"
+  source_access: "full text (Europe PMC)"
+  journal_tier: "American Journal of Gastroenterology (ACG flagship; IF ~10)"
+  population: "Single-centre (Royal Free Hospital liver ICU, London, UK), 635 consecutive patients with cirrhosis admitted to ICU 1989-2012. Excluded: acute liver failure, post-liver-transplant and other postoperative hepatobiliary admissions. Main indications: variceal bleeding 39.1%, sepsis 23.9%. 75%/25% training/validation split; 2005-2012 subset n=306."
+  n_cohort: 635
+  outcome_definition: "In-hospital mortality (death in ICU or after discharge to ward); ICU mortality also reported"
+  outcome_rate: 0.523
+  exposure_definition: "MELD, MELD-sodium, Child-Pugh, SOFA, APACHE II (and CLIF-SOFA in 2005-2012) computed from parameters on the day of ICU admission"
+  key_results:
+    - {name: "In-hospital mortality", value: 0.523, ci: null, quote: "Three hundred and thirty-two patients (52.3%) died either in the ICU or after being discharged to the ward. ICU mortality was 30.2%."}
+    - {name: "ICU mortality", value: 0.302, ci: null, quote: "ICU mortality was 30.2%."}
+    - {name: "AUROC MELD, training set", value: 0.787, ci: null, quote: "Table 5 ... MELD 0.787 6.600 (0.580) 0.749 7.672 (0.466)"}
+    - {name: "AUROC MELD, validation set", value: 0.749, ci: null, quote: "MELD: 0.749 and 7.672 ( P =0.466)"}
+    - {name: "AUROC MELD-Na, training set", value: 0.762, ci: null, quote: "Table 5 ... MELD-sodium 0.762 6.259 (0.618) 0.716 10.598 (0.226)"}
+    - {name: "AUROC MELD-Na, validation set", value: 0.716, ci: null, quote: "MELD-sodium: 0.716 and 10.598 ( P =0.226)"}
+    - {name: "AUROC SOFA, training / validation", value: [0.810, 0.785], ci: null, quote: "Table 5 ... SOFA 0.810 7.343 (0.500) 0.785 9.255 (0.321)"}
+    - {name: "AUROC 2005-2012 subset (n=306): MELD / MELD-Na / SOFA / CLIF-SOFA", value: [0.73, 0.71, 0.74, 0.75], ci: null, quote: "The AUROC for the different scores was the following: Child-Pugh 0.68, MELD 0.73, MELD-sodium 0.71, APACHE II 0.73, SOFA 0.74, FOS-SOFA 0.66, CLIF-SOFA 0.75, FOS-CLIF 0.73, and RFH 0.78."}
+    - {name: "Median MELD survivors vs non-survivors", value: [18, 26], ci: null, quote: "Non-survivors had more severe liver disease, 91% being classified as Child-Pugh C, with median MELD score of 26, while 68% of survivors were Child-Pugh class C, with median MELD score of 18."}
+    - {name: "Optimal MELD cut-off (validation)", value: 21, ci: null, quote: "Table 6 ... MELD 21 0.484 76.5 71.9 0.78 0.71 2.72 0.33 (cutoff, Youden, sens %, spec %, PPV, NPV, LR+, LR-)"}
+  model: "AUROC (discrimination) and Hosmer-Lemeshow goodness-of-fit (calibration) for each score; RFH score derived by multivariable logistic regression (bilirubin, INR, lactate, A-a gradient, urea, variceal bleeding). No CIs reported for AUROCs."
+  design_checklist:
+    - "adult ICU patients with cirrhosis (established by clinical/imaging/biopsy criteria; in MIMIC by ICD codes)"
+    - "exclude acute liver failure"
+    - "exclude post-liver-transplant and postoperative hepatobiliary admissions"
+    - "first ICU admission"
+    - "MELD and MELD-Na computed from labs on the day of ICU admission (first 24 h)"
+    - "outcome = in-hospital mortality (ICU mortality secondary)"
+    - "discrimination by AUROC, compared against SOFA (and APACHE/Child-Pugh)"
+    - "report calibration (Hosmer-Lemeshow) where possible"
+  caveats_vs_mimic: "Single specialist liver ICU in the UK spanning 1989-2012, with very high mortality (52.3%, falling to ~35-42% after 2005) and many variceal-bleeding admissions; MIMIC-IV cirrhosis patients in a general US ICU have lower mortality and different indications (more sepsis/AKI). Identifying cirrhosis by ICD code in MIMIC adds misclassification. AUROCs for MELD ~0.70-0.80 and MELD-Na not better than MELD would be consistent; SOFA usually outperforms MELD."

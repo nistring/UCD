@@ -1,0 +1,121 @@
+"""ucd.llm against a stub OpenAI-compatible gateway (KHDP-like status codes); no network, no real key."""
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+import pytest
+
+from ucd import llm as L
+
+
+class Stub(BaseHTTPRequestHandler):
+    calls = []
+    script = []          # list of (status, body, headers) consumed per POST
+
+    def log_message(self, *a):
+        pass
+
+    def _send(self, status, body, headers=None):
+        raw = json.dumps(body).encode()
+        self.send_response(status)
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_POST(self):
+        Stub.calls.append(self.headers.get("Authorization"))
+        self.rfile.read(int(self.headers["Content-Length"]))
+        status, body, headers = Stub.script.pop(0)
+        self._send(status, body, headers)
+
+    def do_GET(self):
+        Stub.calls.append(self.headers.get("Authorization"))
+        self._send(200, {"data": [{"id": "chat-model"}, {"id": "qwen3-asr"}]})
+
+
+@pytest.fixture
+def server(monkeypatch):
+    srv = HTTPServer(("127.0.0.1", 0), Stub)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    monkeypatch.setattr(L.time, "sleep", lambda s: None)
+    Stub.calls, Stub.script = [], []
+    yield f"http://127.0.0.1:{srv.server_port}/v1"
+    srv.shutdown()
+
+
+def _client(base, key):
+    return L.LocalLLM({"llm": {"base_url": base, "model": "chat-model", "api_key": key}})
+
+
+def test_retry_after_429_then_success(server):
+    ok = {"choices": [{"message": {"content": "<think>x</think>{\"action\": \"status\"}"}}]}
+    Stub.script = [(429, {"detail": "slow"}, {"Retry-After": "1"}), (200, ok, {})]
+    assert L.extract_json(_client(server, "test_key").complete_text("s", "u")) == {"action": "status"}
+    assert Stub.calls == ["Bearer test_key"] * 2
+
+
+def test_no_credit_402_is_not_retried(server):
+    Stub.script = [(402, {"error": "no_credit"}, {})]
+    with pytest.raises(L.LLMError, match="credit"):
+        _client(server, "k").complete_text("s", "u")
+    assert len(Stub.calls) == 1
+
+
+def test_key_file_and_pat_not_allowed_in_config(tmp_path, monkeypatch):
+    f = tmp_path / "pat"
+    f.write_text("khdp_pat_fromfile\n")
+    monkeypatch.setenv("UCD_LLM_API_KEY_FILE", str(f))
+    assert L._api_key({}) == "khdp_pat_fromfile"
+    monkeypatch.delenv("UCD_LLM_API_KEY_FILE")
+    monkeypatch.delenv("UCD_LLM_API_KEY", raising=False)
+    with pytest.raises(L.LLMError):
+        L._api_key({"api_key": "khdp_pat_inconfig"})
+
+
+def test_models_lists_ids(server):
+    assert _client(server, "k").models() == ["chat-model", "qwen3-asr"]
+
+
+def test_extra_body_dropped_when_gateway_rejects_it(server):
+    ok = {"choices": [{"message": {"content": "{\"action\": \"status\"}"}}]}
+    Stub.script = [(400, {"error": "unknown field chat_template_kwargs"}, {}), (200, ok, {})]
+    c = L.LocalLLM({"llm": {"base_url": server, "model": "chat-model", "api_key": "k",
+                            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}}}})
+    assert L.extract_json(c.complete_text("s", "u")) == {"action": "status"}
+    assert c.extra_body == {} and len(Stub.calls) == 2
+
+
+def test_khdp_base_reads_default_pat_file(tmp_path, monkeypatch):
+    for v in ("UCD_LLM_API_KEY_FILE", "UCD_LLM_API_KEY", "KHDP_PAT"):
+        monkeypatch.delenv(v, raising=False)
+    f = tmp_path / "pat"
+    f.write_text("khdp_pat_x\n")
+    monkeypatch.setenv("KHDP_PAT_FILE", str(f))
+    assert L._api_key({"base_url": "https://internal-api.khdp.net/v1", "api_key": "none"}) == "khdp_pat_x"
+    assert L._api_key({"base_url": "http://localhost:8000/v1", "api_key": "none"}) == "none"
+
+
+def test_key_placeholder_brackets_are_stripped(tmp_path, monkeypatch):
+    f = tmp_path / "pat"
+    f.write_text("<khdp_pat_abc>\n")
+    monkeypatch.setenv("UCD_LLM_API_KEY_FILE", str(f))
+    assert L._api_key({}) == "khdp_pat_abc"
+
+
+def test_auto_falls_back_to_responses_api(server):
+    ok = {"output": [{"type": "message", "content": [{"type": "output_text", "text": "{\"action\": \"status\"}"}]}]}
+    Stub.script = [(404, {"detail": "use /v1/responses"}, {}), (200, ok, {})]
+    c = _client(server, "k")
+    assert L.extract_json(c.complete_text("s", "u")) == {"action": "status"} and c.api == "responses"
+
+
+def test_verify_model_rejects_asr_and_unknown(server):
+    c = L.LocalLLM({"llm": {"base_url": server, "model": "qwen3-asr", "api_key": "k", "verify_model": True}})
+    with pytest.raises(L.LLMError, match="not a chat model"):
+        c.complete_text("s", "u")
+    c.model = "nope"
+    with pytest.raises(L.LLMError, match=r"one of: \['chat-model'\]"):
+        c.complete_text("s", "u")

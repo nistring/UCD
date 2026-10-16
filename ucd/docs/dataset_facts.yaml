@@ -1,0 +1,29 @@
+# Per-dataset facts used by loaders, executor and critic (DataAccess.facts = this[name]).
+# Source: the MIMIC-IV documentation.
+
+mimic:
+  label: MIMIC-IV 3.1
+  country: US
+  sites: 1                                    # BIDMC only
+  stay_unit: continuous ICU stay              # icustays merges contiguous ICU transfers (MIMIC-IV docs)
+  stay_per_transfer: false
+  mortality_scope: in_hospital_plus_dod_1y    # hospital_expire_flag/deathtime in-hosp; patients.dod up to 1 y post discharge
+  hospital_expire_flag_includes_certificate: false
+  population: adults_only                     # anchor_age >= 18 (MIMIC-IV docs)
+  includes_pediatric: false
+  code_systems:
+    diagnosis: [ICD9-CM, ICD10-CM]            # diagnoses_icd.icd_version 9/10
+    procedure: [ICD9-PCS, ICD10-PCS]          # MIMIC-IV docs
+    lab: itemid (d_labitems)                  # MIMIC-IV docs
+    drug: [NDC, GSN]                          # MIMIC-IV docs
+    item: integer itemid (d_items)
+  placeholder_codes: []
+  excluded_groups: []                         # none documented
+  free_text: [discharge_notes, radiology_notes]   # no nurse notes
+  stay_id_null_outside_icu: false             # labevents has no stay_id; join by hadm_id/subject_id + time
+  lab_charttime_fallback_admittime: false
+  emar_double_source: false
+  vasopressor_table: icu.inputevents          # NE itemid 221906
+  severity_scores_available: [GCS, SOFA_components, APACHE_components]   # derivable from chartevents (MIMIC-IV docs)
+  date_shift_range: [2100, 2220]              # within pandas ns range
+

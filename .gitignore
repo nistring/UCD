@@ -1,0 +1,48 @@
+# Credentialed data (PhysioNet DUA): never commit raw tables, derived tables or anything row-level
+physionet/
+*.csv.gz
+*.parquet
+*.duckdb
+*.pkl
+*.xlsx
+*.zip
+.kcd_cache/
+
+# Run outputs: agent logs, gate query logs, reports (they hold dataset-derived aggregates)
+runs/
+logs/
+**/gate.log
+samples/*/result*/
+
+# Ground truths and exported cohorts hold real patient ids
+**/gt.csv
+**/cohort.csv
+
+# Evaluator outputs (row-level stay sets, hidden cards, reference cohorts, scores)
+eval/stays/
+eval/cards/
+eval/gt/
+eval/qual/
+eval/mimiccode/derived/
+eval/mimiccode/ref/
+eval/own_refs/*.json
+eval/*.csv
+eval/*.json
+
+# Secrets
+.env
+.khdp_pat
+*_pat
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Development logs (kept locally, not published)
+CHANGELOG.md
+ERRORS.md

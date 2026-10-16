@@ -1,0 +1,26 @@
+# LLM endpoint (any OpenAI-compatible /v1/chat/completions API) and one model per agent role.
+#
+# Environment overrides: UCD_LLM_BASE_URL, UCD_LLM_MODEL (one model for every role),
+# UCD_<ROLE>_MODEL / UCD_<ROLE>_BASE_URL, UCD_LLM_THINKING=0|1, UCD_LLM_API_KEY_FILE / UCD_LLM_API_KEY.
+# The API key never goes in this file (the client refuses it). Check a setup with: python -m ucd.llm check
+#
+# Default profile: the KHDP LLM gateway as seen from inside the KHDP platform network (use the host name, not an IP).
+# From outside the platform use https://api.khdp.net/v1. A KHDP key is read from ~/.khdp_pat (or KHDP_PAT_FILE /
+# KHDP_PAT) and is only ever sent to a *.khdp.net host.
+llm:
+  base_url: https://internal-api.khdp.net/v1
+  model: qwen3-8-flash-next-ax  # fallback for a role without its own model (chat models only)
+  api: auto                     # chat (/chat/completions) | responses (/responses) | auto: chat, else responses
+  verify_model: true            # first call checks the id against GET /v1/models
+  api_key: none
+  max_tokens: 8192
+  temperature: 0.2
+  context_chars: 32000          # loop history budget in characters (~8k tokens)
+  extra_body:                   # Qwen3 thinking off = faster; dropped automatically if the endpoint rejects it
+    chat_template_kwargs: {enable_thinking: false}
+  # Per role you may also set base_url, temperature, max_tokens and thinking (true/false).
+  roles:
+    planner: {model: deepseek-v4-pro-ax, max_tokens: 6144, temperature: 0}  # design loop: many turns; 0 = reproducible
+    intake:  {model: deepseek-v4-pro-ax, max_tokens: 3072}                  # protocol check + questions
+    critic:  {model: qwen3-8-max-ax, max_tokens: 2048}                      # clinical critic + waiver judge: a different
+                                                                            # model family from the planner

@@ -1,0 +1,25 @@
+title: "Self-test: age 65 or older and in-hospital death"
+question: "Is age 65 or older at ICU admission associated with in-hospital death among adults in their first ICU stay?"
+pico: {population: "adults, first ICU stay per patient", exposure_or_predictor: "age >= 65", comparator: "age 18-64",
+       outcome: "in-hospital death"}
+unit_of_analysis: icu_stay
+repeated_units: first_only
+index_time: "ICU admission (icustays.intime)"
+prediction_time_h: 0
+outcome_from_h: 0
+population_criteria:
+  - {flag: incl_adult, description: "age >= 18 at admission"}
+exposure: {column: age_65, description: "age >= 65 at admission", type: binary, window_start_h: 0, window_end_h: 0}
+outcome: {column: outcome, description: "in-hospital death"}
+covariates:
+  - {column: male, description: "sex recorded as male", type: binary, window_start_h: 0, window_end_h: 0}
+model: {type: logistic, predictors: [age_65, male], primary_term: age_65}
+waivers: []
+sensitivity: []
+protocol_mapping:
+  - {item: P1, implemented_as: "incl_adult on the first ICU stay per patient", deviation: ""}
+  - {item: P2, implemented_as: "age_65", deviation: ""}
+  - {item: P3, implemented_as: "outcome = hospital_expire_flag", deviation: ""}
+shrink_justification: ""
+limitations: ["self-test design: checks the pipeline, not a clinical question"]
+changes_from_previous: ""
