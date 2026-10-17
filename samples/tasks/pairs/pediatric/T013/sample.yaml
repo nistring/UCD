@@ -1,0 +1,7 @@
+dataset: mimic
+expected_status:
+- empty_result
+- unanswerable
+pair_of: T013
+change: pediatric
+why_invalid: the dataset holds adults only

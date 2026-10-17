@@ -84,7 +84,7 @@ GROUPS = {"baselines": [a for a, v in ARMS.items() if v["group"] == "baselines"]
           "all": list(ARMS)}
 FIELDS = ["sample", "arm", "planner", "rep", "status", "seconds", "turns", "designs_run", "design_attempts", "n_final", "events",
           "primary", "I_rule", "rule_blocks", "verdict", "expected", "verdict_ok", "jaccard", "recall", "precision", "n_gt",
-          "noop_streak", "bad_turns", "run_dir"]
+          "noop_streak", "bad_turns", "run_dir", "sample_dir"]
 
 ONE_SHOT = """
 
@@ -145,6 +145,11 @@ def generate_once(run_dir: Path, question: str, dataset: str, llm) -> str:
     return obs
 
 
+def sample_id(sample: Path) -> str:
+    """A short unique name: the folder and its category (answerable/T003, pediatric/T003, dysnatremia/pressure)."""
+    return "/".join(Path(sample).resolve().parts[-2:])
+
+
 def planner_env(spec: str) -> tuple[str, dict[str, str]]:
     """'model[:think]' -> (label, environment for the planner role only); '' = the configured planner."""
     if not spec:
@@ -199,17 +204,19 @@ def run_arm(arm: str, sample: Path, out: Path, rep: int, max_turns: int, llm=Non
     conf = ARMS[arm]
     request, gt, dataset = sample_inputs(sample)
     label, penv = planner_env(planner)
-    run_dir = out / sample.name / (f"{arm}@{label}" if label else arm) / f"rep{rep}"
-    question, why = (request, "") if conf.get("raw") else shared_protocol(request, dataset, out / sample.name)
+    sid = sample_id(sample)
+    run_dir = out / sid / (f"{arm}@{label}" if label else arm) / f"rep{rep}"
+    question, why = (request, "") if conf.get("raw") else shared_protocol(request, dataset, out / sid)
     t0 = time.time()
     allowed = expected_status(sample)
     if question is None:                               # stopped at intake: the shared protocol was refused
         v = "unanswerable"
-        return {"sample": sample.name, "arm": arm, "planner": label, "rep": rep, "status": why, "verdict": v,
+        return {"sample": sid, "sample_dir": str(sample), "arm": arm, "planner": label, "rep": rep, "status": why,
+                "verdict": v,
                 "run_dir": str(run_dir),
                 "expected": "|".join(allowed), "verdict_ok": (v in allowed) if allowed else None}
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "meta.json").write_text(json.dumps({"topic": sample.name, "run": run_dir.name, "question": question,
+    (run_dir / "meta.json").write_text(json.dumps({"topic": sid, "run": run_dir.name, "question": question,
                                                    "mode": "auto", "dataset": dataset, "arm": arm},
                                                   indent=1, ensure_ascii=False), encoding="utf-8")
     (run_dir / "run_config.json").write_text(json.dumps(conf["config"]), encoding="utf-8")
@@ -222,7 +229,7 @@ def run_arm(arm: str, sample: Path, out: Path, rep: int, max_turns: int, llm=Non
         if conf.get("generator"):
             generate_once(run_dir, question, dataset, llm or LocalLLM(role="planner"))
         else:
-            loop.run_loop(sample.name, run_dir, [dataset], max_turns, question=question,
+            loop.run_loop(sid, run_dir, [dataset], max_turns, question=question,
                           asker=Asker("auto", log=run_dir / "questions.jsonl"), llm=llm)
         status = "ok"
     except Exception as e:                              # one broken run must not stop the experiment
@@ -230,7 +237,7 @@ def run_arm(arm: str, sample: Path, out: Path, rep: int, max_turns: int, llm=Non
     finally:
         for k, v in saved.items():
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
-    row = {**collect(run_dir, dataset, gt), "sample": sample.name, "arm": arm, "planner": label, "rep": rep,
+    row = {**collect(run_dir, dataset, gt), "sample": sid, "sample_dir": str(sample), "arm": arm, "planner": label, "rep": rep,
            "status": status,
            "seconds": round(time.time() - t0, 1), "run_dir": str(run_dir), "expected": "|".join(allowed)}
     row["verdict_ok"] = (row.get("verdict") in allowed) if allowed else None
@@ -358,10 +365,10 @@ def intake_check(samples: list[Path], models: list[str], out: Path) -> str:
             finally:
                 os.environ.pop("UCD_INTAKE_MODEL", None) if saved is None else os.environ.__setitem__("UCD_INTAKE_MODEL", saved)
             should = bool(allowed) and "normal" not in allowed
-            rows.append({"model": m, "sample": s.name, "should_flag": should, "flagged": flagged, "kind": kind,
+            rows.append({"model": m, "sample": sample_id(s), "should_flag": should, "flagged": flagged, "kind": kind,
                          "correct": None if flagged is None else flagged == should, "seconds": round(time.time() - t0, 1),
                          "why": why})
-            print(f"  {m} {s.name}: should flag {should}, flagged {flagged} {kind}")
+            print(f"  {m} {sample_id(s)}: should flag {should}, flagged {flagged} {kind}")
     out.mkdir(parents=True, exist_ok=True)
     (out / "intake_check.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
     L = ["| intake model | correct | invalid flagged | valid passed | errors | median seconds |", "|---|---|---|---|---|---|"]
@@ -393,14 +400,14 @@ def _parallel(jobs_list: list[tuple], out: Path, jobs: int, max_turns: int) -> N
 
     def one(job):
         s_, arm, rep, pl = job
-        name = f"{s_.name}__{arm}__{(pl or 'configured').replace(':', '-')}__rep{rep}"
+        name = f"{sample_id(s_).replace('/', '__')}__{arm}__{(pl or 'configured').replace(':', '-')}__rep{rep}"
         cmd = [sys.executable, "-m", "eval.experiments", "one", str(s_), "--arm", arm, "--rep", str(rep),
                "--out", str(out), "--max-turns", str(max_turns)] + (["--planner", pl] if pl else [])
         with open(logs / f"{name}.log", "w", encoding="utf-8") as fh:
             subprocess.call(cmd, stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env, cwd=str(ROOT))
         text = (logs / f"{name}.log").read_text(encoding="utf-8", errors="replace")
         line = next((l for l in reversed(text.splitlines()) if l.startswith("ROW ")), None)
-        return json.loads(line[4:]) if line else {"sample": s_.name, "arm": arm, "planner": planner_env(pl)[0],
+        return json.loads(line[4:]) if line else {"sample": sample_id(s_), "arm": arm, "planner": planner_env(pl)[0],
                                                      "rep": rep, "status": "error: no result (see logs/)"}
 
     with ThreadPoolExecutor(jobs) as ex:
@@ -466,13 +473,13 @@ def main(argv=None) -> int:
     if any(not ARMS[arm].get("raw") for arm in arms):  # the shared intake protocols first, once per sample
         for s_ in samples:
             request, _, dataset = sample_inputs(s_)
-            shared_protocol(request, dataset, out / s_.name)
+            shared_protocol(request, dataset, out / sample_id(s_))
     max_turns = a.max_turns or loop.MAX_TURNS
     if a.jobs > 1:
         _parallel(todo, out, a.jobs, max_turns)
     else:
         for k, (s_, arm, rep, pl) in enumerate(todo, 1):
-            print(f"\n[{k}/{len(todo)}] {s_.name} / {arm} / {pl or 'configured planner'} / rep {rep}")
+            print(f"\n[{k}/{len(todo)}] {sample_id(s_)} / {arm} / {pl or 'configured planner'} / rep {rep}")
             row = run_arm(arm, s_, out, rep, max_turns, planner=pl)
             append_row(out, row)
             print(f"  {row['status']}; designs run {row.get('designs_run')}; n {row.get('n_final')}; "

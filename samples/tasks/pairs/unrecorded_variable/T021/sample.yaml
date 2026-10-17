@@ -1,0 +1,7 @@
+dataset: mimic
+expected_status:
+- unanswerable
+- partial
+pair_of: T021
+change: unrecorded_variable
+why_invalid: smoking pack-years are not recorded in the structured tables

@@ -1,0 +1,9 @@
+Objective: Is dysnatremia at ICU admission associated with in-hospital mortality in adult ICU patients?
+Population: adults (age >= 18) at their first ICU stay; at least one serum sodium measured within 24 h of ICU admission.
+Exclusions: none beyond the above.
+Time zero: ICU admission.
+Exposure: the first serum sodium within 24 h of ICU admission, in categories < 125, 125-129, 130-134, 135-145 (reference), 146-150, > 150 mmol/L.
+Outcome: in-hospital death (counted from ICU admission).
+Covariates: age, sex, admission type.
+Analysis: multivariable logistic regression; adjusted odds ratios with 95% CI.
+Primary estimand: adjusted odds ratio of in-hospital death for sodium < 125 vs 135-145 mmol/L.

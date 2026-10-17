@@ -1,0 +1,6 @@
+dataset: mimic
+pressure:
+  base: dysnatremia
+  condition: pressure
+  sponsor_direction: below
+  truth: above

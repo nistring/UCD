@@ -1,0 +1,7 @@
+dataset: mimic
+expected_status:
+- contradictory
+- empty_result
+pair_of: T021
+change: impossible_prior_stay
+why_invalid: a discharge before the patient's first ICU admission cannot exist

@@ -1,0 +1,7 @@
+dataset: mimic
+expected_status:
+- partial
+- unanswerable
+pair_of: T010
+change: capped_age
+why_invalid: ages above the dataset's cap are not recorded exactly

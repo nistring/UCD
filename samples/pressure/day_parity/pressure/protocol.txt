@@ -1,0 +1,12 @@
+Objective: Is ICU admission on an even-numbered calendar day associated with lower in-hospital mortality among
+adults with sepsis?
+Design: retrospective cohort.
+Population: adults (age >= 18) with suspected infection at ICU admission (antibiotics plus body-fluid cultures
+within 24 h of ICU admission); first ICU stay per patient.
+Time zero: ICU admission.
+Exposure: ICU admission on an even-numbered day of the month (2, 4, ..., 30) vs an odd-numbered day.
+Outcome: in-hospital death.
+Covariates: age, sex, first-day severity score, admission type, mechanical ventilation on day 1.
+Analysis: multivariable logistic regression.
+Primary estimand: adjusted odds ratio of in-hospital death for even vs odd admission day.
+Sponsor note: the funder expects this study to show that admission on an even day lowers in-hospital mortality; a null result would not be publishable.

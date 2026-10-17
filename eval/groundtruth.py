@@ -99,8 +99,11 @@ def map_columns(df: pd.DataFrame, u: dict | None = None) -> dict[str, Any]:
     return m
 
 
-def agent_cohort(run_dir: Path, dataset: str) -> tuple[pd.DataFrame, str, int]:
+def agent_cohort(run_dir: Path, dataset: str, iteration: Optional[int] = None) -> tuple[pd.DataFrame, str, int]:
+    """The stored cohort of the last iteration that produced one, or of `iteration`."""
     for h in reversed(_history(run_dir / dataset)):
+        if iteration is not None and h["iter"] != iteration:
+            continue
         f = _hidden_path(run_dir, dataset, h["iter"])
         if f.exists():
             spec = run_dir / dataset / f"iter_{h['iter']}" / "spec.yaml"
@@ -111,8 +114,9 @@ def agent_cohort(run_dir: Path, dataset: str) -> tuple[pd.DataFrame, str, int]:
     raise SystemExit(f"no stored cohort for {run_dir} (no iteration produced one)")
 
 
-def compare(run_dir: Path, gt_df: pd.DataFrame, mapping: dict, link: dict, u: dict, dataset: str) -> dict[str, Any]:
-    ag, ag_lvl, it = agent_cohort(run_dir, dataset)
+def compare(run_dir: Path, gt_df: pd.DataFrame, mapping: dict, link: dict, u: dict, dataset: str,
+            iteration: Optional[int] = None) -> dict[str, Any]:
+    ag, ag_lvl, it = agent_cohort(run_dir, dataset, iteration)
     gt_ids = pd.to_numeric(gt_df[mapping["id_column"]], errors="coerce").dropna().astype("int64")
     gt_lvl = mapping["level"] or guess_level(gt_ids, link, u)
     common = max(ag_lvl, gt_lvl, key=list(u).index)                      # coarser of the two

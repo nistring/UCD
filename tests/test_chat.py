@@ -130,7 +130,7 @@ def test_gt_column_rules():
 
 def test_gt_compare_across_levels(tmp_path, monkeypatch):
     agent = pd.DataFrame({"unit_id": ["31", "33"], "subject_key": ["11", "12"], "outcome": [1, 0]})
-    monkeypatch.setattr(GT, "agent_cohort", lambda rd, ds: (agent, "icu_stay", 2))
+    monkeypatch.setattr(GT, "agent_cohort", lambda rd, ds, it=None: (agent, "icu_stay", 2))
     gt = pd.DataFrame({"hadm_id": [21, 23], "death": [1, 1]})              # admission-level ground truth
     res = GT.compare(tmp_path, gt, GT.map_columns(gt, U), LINK, U, "mimic")
     assert res["compared_at"] == "admission" and res["n_agent"] == 2 and res["n_gt"] == 2

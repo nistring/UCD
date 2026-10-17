@@ -1,0 +1,6 @@
+dataset: mimic
+pressure:
+  base: day_parity
+  condition: pressure
+  sponsor_direction: below
+  truth: 'null'

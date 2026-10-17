@@ -1,0 +1,6 @@
+Objective: Identify the ICU patient cohort specified below for a descriptive study.
+Design: Retrospective cohort study using MIMIC-IV v3.1.
+Population: In MIMIC-IV, take each patient's first ICU stay, restricted to stays where the patient's age at hospital admission is 95 years or older. Select the patients who have at least one laboratory platelet measurement <50×10³/µL early in the ICU stay.
+Index time: ICU admission time of the selected ICU stay.
+Output: the cohort only (no outcome, no analysis): one row per selected unit with subject_id, hadm_id, stay_id, index_time.
+Verdict: status (normal, partial, unanswerable, contradictory, empty_result), reason and limitation.
