@@ -1,2 +1,2 @@
 """UCD: a privacy-preserving cohort-design agent."""
-__version__ = "0.17.2"
+__version__ = "0.17.3"

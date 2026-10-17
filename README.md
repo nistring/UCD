@@ -240,13 +240,7 @@ LLM settings live in [`ucd/config.yaml`](ucd/config.yaml); environment variables
 | `qwen3-8-flash-next-ax` (Qwen3.8-Flash-Next) | reports disagree | – | low | – |
 | `deepseek-v4-pro-ax` (DeepSeek V4 Pro) | 36 | 85 tok/s | 0.87 | 49B / 1.6T |
 
-| Role | Model and settings | Why |
-|---|---|---|
-| `planner` | `glm-5-3-ax`, thinking off, temperature 0, 12k output tokens | top index, at about twice the speed and two-thirds the price of Qwen3.8-Max; a run makes about 25 planner calls, so speed matters most here |
-| `intake` | `deepseek-v4-1-flash-ax` | the lightest model with an index near 40; intake makes a few short calls |
-| `critic` | `qwen3-8-max-ax`, thinking on | top index and the strongest reasoning scores (GPQA Diamond 92.6); its cost matters little at a few calls per run; a different model family from the planner keeps the review independent |
-
-A lighter planner, `deepseek-v4-1-flash-ax` (index 39–40, 8–16B active), is the alternative to compare against (`--planner deepseek-v4-1-flash-ax`, see [Comparing models](#comparing-models)). Not chosen: `deepseek-v4-pro-ax` scores below its lighter successor V4.1 Flash, and `qwen3-8-flash-next-ax` has conflicting index reports and shares the critic's family. Reasoning mode stays off for planner and intake to keep runs light.
+**Setting: one light model for every role**, `deepseek-v4-1-flash-ax`, thinking off. It is the lightest model near the top of the table above (index 39–40 at 8–16B active parameters), and a run makes about 25 planner calls, so burden matters most. To use another model, edit `ucd/config.yaml` or set `UCD_LLM_MODEL` (all roles) or `UCD_<ROLE>_MODEL` (one role). Trade-off: the critic now shares the planner's model family; a different family (e.g. `UCD_CRITIC_MODEL=qwen3-8-max-ax`) gives a more independent review at a higher cost per call.
 
 **Thinking switches differ by model family.** Qwen and DeepSeek use `chat_template_kwargs: {enable_thinking: ...}`; GLM ignores that field and writes its reasoning into the reply, so it gets its own `thinking: {type: disabled}` (`ucd/llm.py`, `thinking_switch`). `python -m ucd.llm check` sends one test call per role and warns when a model writes text before its JSON or hits its output limit. Any OpenAI-compatible endpoint works.
 
