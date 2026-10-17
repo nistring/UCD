@@ -204,8 +204,8 @@ Each arm is a set of `run_config.json` switches, so the same switches work on an
 
 ```bash
 python -m eval.experiments run <samples> --arms no_intake --jobs 4 \
-    --planner deepseek-v4-pro-ax --planner deepseek-v4-pro-ax:think --planner qwen3-8-max-ax   # planner models
-python -m eval.experiments intake <samples> --models deepseek-v4-pro-ax,qwen3-8-max-ax --out <dir>   # intake models
+    --planner glm-5-3-ax --planner glm-5-3-ax:think --planner qwen3-8-max-ax                 # planner models
+python -m eval.experiments intake <samples> --models deepseek-v4-1-flash-ax,glm-5-3-ax --out <dir>   # intake models
 UCD_CRITIC_MODEL=<model> python -m eval.judge_eval --reps 2                                        # critic models
 ```
 
@@ -230,13 +230,23 @@ UCD_CRITIC_MODEL=<model> python -m eval.judge_eval --reps 2                     
 
 LLM settings live in [`ucd/config.yaml`](ucd/config.yaml); environment variables override them.
 
-| Role | Recommended model and settings | Why (observed in this project's runs, not a benchmark) |
-|---|---|---|
-| `planner` | `deepseek-v4-pro-ax`, thinking off, temperature 0 | ran a design by turn 8 in its first live run; the example study matched the ground truth (Jaccard 0.994). A smaller model (`qwen3-8-flash-next-ax`) spent 24 of 30 turns on lookups and never ran a design |
-| `intake` | `deepseek-v4-pro-ax` | asked three sensible questions in 18 s with the schema in view |
-| `critic` | `qwen3-8-max-ax` | a different model family from the planner, so the review is independent; 24 s per review, and it caught a wrong sodium window, an undeclared landmark and model separation. `glm-5-3-ax` returned no valid reply after 259 s |
+**Model choice.** The models were chosen by public benchmark results and by their burden (speed, size, price), not by results on this project. Figures are from Artificial Analysis and the vendors, in reasoning mode; vendor numbers are self-reported, and the KHDP gateway's `-ax` deployments may differ.
 
-Reasoning ("thinking") mode stays off by default: it is slower, and long replies were cut off at the token limit before. It is worth testing as a planner variant (`--planner deepseek-v4-pro-ax:think`, see [Comparing models](#comparing-models)). The models above are those of the KHDP gateway; any OpenAI-compatible endpoint works.
+| Gateway model | Intelligence Index (Artificial Analysis) | Output speed | Output price, $ / 1M tokens | Active / total parameters |
+|---|---|---|---|---|
+| `qwen3-8-max-ax` (Qwen3.8-Max) | 45 | 35 tok/s | 6.00 | closed |
+| `glm-5-3-ax` (GLM-5.3) | 45 | ~74 tok/s | 4.40 | 40B / 753B |
+| `deepseek-v4-1-flash-ax` (DeepSeek V4.1 Flash) | 39–40 | – | low | 8–16B / 552B |
+| `qwen3-8-flash-next-ax` (Qwen3.8-Flash-Next) | reports disagree | – | low | – |
+| `deepseek-v4-pro-ax` (DeepSeek V4 Pro) | 36 | 85 tok/s | 0.87 | 49B / 1.6T |
+
+| Role | Model and settings | Why |
+|---|---|---|
+| `planner` | `glm-5-3-ax`, thinking off, temperature 0 | top index, at about twice the speed and two-thirds the price of Qwen3.8-Max; a run makes about 25 planner calls, so speed matters most here |
+| `intake` | `deepseek-v4-1-flash-ax` | the lightest model with an index near 40; intake makes a few short calls |
+| `critic` | `qwen3-8-max-ax`, thinking on | top index and the strongest reasoning scores (GPQA Diamond 92.6); its cost matters little at a few calls per run; a different model family from the planner keeps the review independent |
+
+Not chosen: `deepseek-v4-pro-ax` scores below its lighter successor V4.1 Flash, and `qwen3-8-flash-next-ax` has conflicting index reports and shares the critic's family. Reasoning mode stays off for the planner to keep 25-call runs fast; compare it with `--planner glm-5-3-ax:think` (see [Comparing models](#comparing-models)). Any OpenAI-compatible endpoint works.
 
 | Variable | Effect |
 |---|---|

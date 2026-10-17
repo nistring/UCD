@@ -9,7 +9,7 @@
 # KHDP_PAT) and is only ever sent to a *.khdp.net host.
 llm:
   base_url: https://internal-api.khdp.net/v1
-  model: qwen3-8-flash-next-ax  # fallback for a role without its own model (chat models only)
+  model: deepseek-v4-1-flash-ax  # fallback for a role without its own model (chat models only)
   api: auto                     # chat (/chat/completions) | responses (/responses) | auto: chat, else responses
   verify_model: true            # first call checks the id against GET /v1/models
   api_key: none
@@ -19,17 +19,17 @@ llm:
   extra_body:                   # Qwen3 thinking off = faster; dropped automatically if the endpoint rejects it
     chat_template_kwargs: {enable_thinking: false}
   # Per role you may also set base_url, temperature, max_tokens and thinking (true/false).
-  # Recommended setup for the KHDP gateway, from the runs recorded so far (not a benchmark; compare models with
-  # eval/experiments.py --planner / intake and eval/judge_eval.py before changing it):
-  #   planner  deepseek-v4-pro-ax, thinking off, temperature 0: ran a design by turn 8 in its first live run; the
-  #            example study reached Jaccard 0.994 against the ground truth. qwen3-8-flash-next-ax spent 24 of 30
-  #            turns on lookups and never ran a design. Thinking stays off: slower, and long replies were cut off at
-  #            the token limit before; try it as a planner variant (--planner deepseek-v4-pro-ax:think).
-  #   intake   deepseek-v4-pro-ax: three sensible questions in 18 s on the schema-aware intake.
-  #   critic   qwen3-8-max-ax: a different model family from the planner (independent review), 24 s per review,
-  #            caught a wrong sodium window, an undeclared landmark and model separation. glm-5-3-ax returned no
-  #            JSON after 259 s; deepseek models would share the planner's family.
+  # Model choice (2026-10-17): by public benchmark results and burden only, not by results on this project.
+  #   planner  glm-5-3-ax          Artificial Analysis Intelligence Index 45 (tied best of the gateway models),
+  #                                40B active of 753B, ~74 tok/s, $4.40 / 1M output; ~25 calls per run, so speed counts
+  #   intake   deepseek-v4-1-flash-ax  index 39-40 at 8-16B active (552B total): the lightest; a few short calls
+  #   critic   qwen3-8-max-ax      index 45, GPQA Diamond 92.6; slow (35 tok/s) and dear ($6 / 1M output), but at most
+  #                                a few calls per run; a third model family, so its review is independent of the planner
+  # Not chosen: deepseek-v4-pro-ax (index 36 with 49B active: outscored by the lighter V4.1 Flash), qwen3-8-flash-next-ax
+  # (index reports disagree; same family as the critic). Scores are vendor or Artificial Analysis figures in reasoning
+  # mode; the gateway's "-ax" deployments may differ. Thinking: on for the critic (few calls), off for the planner
+  # (25 calls; try --planner glm-5-3-ax:think in eval/experiments.py) and for intake.
   roles:
-    planner: {model: deepseek-v4-pro-ax, max_tokens: 6144, temperature: 0}  # design loop: many turns; 0 = reproducible
-    intake:  {model: deepseek-v4-pro-ax, max_tokens: 3072}                  # protocol check + questions
-    critic:  {model: qwen3-8-max-ax, max_tokens: 2048}                      # clinical critic + waiver judge
+    planner: {model: glm-5-3-ax, max_tokens: 6144, temperature: 0}             # design loop: many turns; 0 = reproducible
+    intake:  {model: deepseek-v4-1-flash-ax, max_tokens: 3072}                 # protocol check + questions
+    critic:  {model: qwen3-8-max-ax, max_tokens: 8192, thinking: true}         # clinical critic + waiver judge

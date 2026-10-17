@@ -7,7 +7,7 @@
   python -m eval.experiments intake samples/tasks/*/* --models a,b  does each intake model flag the invalid tasks?
 
 Planner comparison: --planner MODEL[:think] (repeatable) runs every arm once per planner setting, e.g.
-  --planner deepseek-v4-pro-ax --planner deepseek-v4-pro-ax:think --planner qwen3-8-max-ax
+  --planner glm-5-3-ax --planner glm-5-3-ax:think --planner qwen3-8-max-ax
 (:think turns on the model's reasoning mode for the planner only, with a 16k reply budget). --jobs N runs N at once.
 
 Every arm gets the same sample request and the same data access (the gate's aggregate API). Arms that use intake

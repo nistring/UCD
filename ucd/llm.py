@@ -1,6 +1,6 @@
 """Client for an OpenAI-compatible chat endpoint, normally the KHDP gateway's
 hosted-model relay (credit-gated, PAT as the API key). Default (config.yaml): the KHDP internal gateway
-`https://internal-api.khdp.net/v1` with model `qwen3-8-flash-next-ax`. Use the host name, not an IP (an IP gives 404);
+`https://internal-api.khdp.net/v1` with one model per role (ucd/config.yaml). Use the host name, not an IP (an IP gives 404);
 requests to internal-api.khdp.net bypass any HTTP proxy automatically (same effect as adding it to NO_PROXY).
 
 Standard library only. Settings: ucd/config.yaml, overridden by environment variables:
