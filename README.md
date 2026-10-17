@@ -322,6 +322,8 @@ python -m ucd.diag summary                        # local error and run log (log
 
 Never commit data, run folders, `gt.csv` or cohort files: `.gitignore` covers them.
 
+**Offline installs (e.g. the KHDP server).** A bundle zip holds the committed files plus `.ucd_manifest.json`. Update an install with `python -m ucd.update ../ucd_bundle_v<version>_<time>.zip [--dry-run]`: only changed files are rewritten, your own edits are kept, and everything replaced or removed is backed up in `.ucd_update_backup/<time>/`.
+
 ## 12. Insight
 
 An agent that never sees a patient row can still design plausible cohort studies. Its errors, however, are subtle design choices rather than obvious failures, and the guardrails meant to catch them can introduce bias of their own. Automated checks therefore support careful human review; they do not replace it.
