@@ -93,7 +93,9 @@ def test_planner_settings_and_the_stuck_metric(tmp_path, monkeypatch):
     rs = role_settings(dict(load_config()["llm"]), "planner")
     assert rs["model"] == "deepseek-v4-pro-ax" and rs["max_tokens"] == 16384
     assert rs["extra_body"]["chat_template_kwargs"]["enable_thinking"] is True
-    assert role_settings(dict(load_config()["llm"]), "critic")["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
+    critic_cfg = bool(load_config()["llm"]["roles"]["critic"].get("thinking", False))    # the planner's switch stays
+    assert role_settings(dict(load_config()["llm"]), "critic")["extra_body"]["chat_template_kwargs"]["enable_thinking"] \
+        is critic_cfg                                                                    # out of the other roles
     log = tmp_path / "loop_log.jsonl"
     log.write_text("\n".join(json.dumps({"observation": o}) for o in
                              ["wrote x", "NO CHANGE: a", "NO CHANGE: a", "INVALID: y", "NO CHANGE: a"]), encoding="utf-8")
