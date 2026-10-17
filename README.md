@@ -13,7 +13,7 @@ UCD was built for the Korea Clinical Datathon 2026 (theme *"Agentic AI: Light & 
 2. [Quick start](#2-quick-start)
 3. [Usage](#3-usage)
 4. [How it works](#4-how-it-works)
-5. [Experiments: baselines and ablations](#5-experiments-baselines-and-ablations)
+5. [Experiments: baselines, ablations, models and studies](#5-experiments)
 6. [Configuration](#6-configuration)
 7. [Privacy model](#7-privacy-model)
 8. [Datasets](#8-datasets)
@@ -151,7 +151,7 @@ Runs are written to `runs/ucd/<question>/<time>/`, or to `samples/<name>/result/
 
 **What the prompts know.** The prompts and critic rules are dataset-generic: they speak in the agent's own columns (`unit_id`, `index_time`, `unit_end_time`). Everything specific to a dataset (table and column names, how death is recorded, when codes are dated) comes from the Data Card: the registry, the schema, and `ucd/docs/<dataset>_notes.md`.
 
-## 5. Experiments: baselines and ablations
+## 5. Experiments
 
 `eval/experiments.py` runs sample studies under several agent configurations ("arms") and compares them.
 
@@ -168,9 +168,13 @@ python -m eval.experiments summary runs/experiments/tasks                    # r
 |---|---|
 | `samples/example/t3_sodium_question/` | the example study (a one-line question), with a published example run in `result/` |
 | `samples/tasks/answerable/T0xx/` | 20 artificially generated cohort tasks with a valid answer: the agent should build the cohort (verdict `normal`) |
-| `samples/tasks/not_answerable/T0xx/` | 4 tasks the agent should refuse or qualify: a population that cannot exist in the data, a value the data caps, criteria that contradict each other (verdict `empty_result`, `unanswerable`, `contradictory` or `partial`) |
+| `samples/tasks/not_answerable/T0xx/` | 4 tasks the agent should refuse or qualify: a population that cannot exist in the data, a value the data caps, criteria that contradict each other, a follow-up longer than the data covers |
+| `samples/tasks/pairs/<change>/T0xx/` | invalid twins of answerable tasks, one detail changed (see the minimal-pair study below) |
+| `samples/pressure/<base>/{neutral,pressure}/` | protocols with and without a sponsor's expected result (see the pressure study below) |
 
-Each task's `sample.yaml` lists the verdicts it accepts. A task can also hold a `gt.csv` with the expected cohort, which holds real ids and is therefore not published. Score a set of runs with `python -m ucd.sample score samples/tasks/*/*`: it reports the share of accepted verdicts, the cohort agreement, and how many invalid tasks the agent rejected.
+Each task's `sample.yaml` lists the verdicts it accepts. A task can also hold a `gt.csv` with the expected cohort; it holds real ids, so it is never published. `python -m ucd.sample score samples/tasks/*/*` reports the share of accepted verdicts, the cohort agreement, and how many invalid tasks the agent rejected.
+
+### Arms
 
 **Baselines** use the same model and data access with less structure around it:
 
@@ -194,15 +198,33 @@ Each task's `sample.yaml` lists the verdicts it accepts. A task can also hold a 
 | `blinded` | (added rather than removed) outcome-blinded design phase |
 | `same_model_critic` | model diversity: the critic uses the planner's model |
 
-**What is shared:**
+Each arm is a set of `run_config.json` switches, so the same switches work on any run: `llm_critic`, `rule_feedback`, `waivers`, `explore`, `concepts`, `notes`, `max_iter`, `blind_outcome`.
+
+### Comparing models
+
+```bash
+python -m eval.experiments run <samples> --arms no_intake --jobs 4 \
+    --planner deepseek-v4-pro-ax --planner deepseek-v4-pro-ax:think --planner qwen3-8-max-ax   # planner models
+python -m eval.experiments intake <samples> --models deepseek-v4-pro-ax,qwen3-8-max-ax --out <dir>   # intake models
+UCD_CRITIC_MODEL=<model> python -m eval.judge_eval --reps 2                                        # critic models
+```
+
+`:think` turns on reasoning for the planner only. The intake check asks whether each model stops at the invalid tasks and passes the valid ones; the judge test counts false waivers and false denials on planted cases.
+
+### Results
+
 - Every arm with intake starts from the same protocol per sample, written once in auto mode.
 - The rule critic scores every executed design in every arm. Where an arm hides it from the planner, it is stored on the evaluator side, so `I_rule` stays comparable.
+- `<out>/results.csv` has one row per run: designs run, turns, invalid turns, the longest streak of edits that changed nothing, seconds, cohort size, primary estimate, `I_rule`, open rule blocks, the verdict and whether the task accepts it, and Jaccard / recall / precision when the sample has a `gt.csv`.
+- `<out>/summary.md` holds the means per arm and planner, the share of accepted verdicts, and the number of invalid tasks rejected.
 
-**Results:**
-- `<out>/results.csv` has one row per run: designs run, turns, seconds, cohort size, primary estimate, `I_rule`, open rule blocks, the verdict and whether the task accepts it, and Jaccard / recall / precision when the sample has a `gt.csv`.
-- `<out>/summary.md` holds the means per arm, the share of accepted verdicts, and the number of invalid tasks rejected.
+### Studies
 
-**Mechanism:** each arm is a set of `run_config.json` switches, so the same switches work on any run: `llm_critic`, `rule_feedback`, `waivers`, `explore`, `concepts`, `notes`, `max_iter`, `blind_outcome`.
+| Study | Question | Commands |
+|---|---|---|
+| **Minimal pairs** | Does the agent notice an invalid detail, or does it refuse everything? Each answerable task gets twins that differ in one detail: children in an adults-only dataset, an age above the data's cap, an impossible earlier ICU stay, a follow-up longer than the data covers, an unrecorded variable. | `python -m eval.minimal_pairs samples/tasks/answerable/T0xx ...`, then run the originals and `samples/tasks/pairs/*/*` |
+| **Rule attribution** | Which critic findings move the cohort toward the ground truth, and which push it away? Each revision's change in Jaccard is credited to the findings it resolved (associative, not causal). | `python -m eval.rule_attribution runs/experiments/<out>` |
+| **Outcome pressure** | Does a sponsor's expected result change the design, the estimate or the claims? Two bases (a real association and a null by construction), each neutral and pressured, run with and without outcome blinding. | `python -m eval.experiments run samples/pressure/*/* --arms full,blinded`, then `python -m eval.pressure report runs/experiments/<out>` |
 
 ## 6. Configuration
 
