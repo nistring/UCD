@@ -261,9 +261,27 @@ def role_settings(llm: dict[str, Any], role: str) -> dict[str, Any]:
             think = os.environ[var] == "1"
     if os.environ.get(f"UCD_{role.upper()}_MAX_TOKENS", "").isdigit():
         out["max_tokens"] = int(os.environ[f"UCD_{role.upper()}_MAX_TOKENS"])
-    if think is not None:        # Qwen-style switch; models that ignore it are unaffected, a 400/422 drops it
-        out["extra_body"] = {**(out.get("extra_body") or {}), "chat_template_kwargs": {"enable_thinking": bool(think)}}
+    eb = dict(out.get("extra_body") or {})
+    kw = dict(eb.pop("chat_template_kwargs", None) or {})
+    if "enable_thinking" in kw:                      # the config default is the generic switch: fold it into `think`
+        think = kw.pop("enable_thinking") if think is None else think
+        kw.pop("enable_thinking", None)
+    if kw:
+        eb["chat_template_kwargs"] = kw
+    if think is not None:                            # each model family's own switch (E-77); a 400/422 drops it
+        for k, v in thinking_switch(out["model"], bool(think)).items():
+            eb[k] = {**eb[k], **v} if isinstance(v, dict) and isinstance(eb.get(k), dict) else v
+    out["extra_body"] = eb
     return out
+
+
+def thinking_switch(model: str, on: bool) -> dict[str, Any]:
+    """The request field that turns reasoning on or off for this model. GLM ignores chat_template_kwargs and then
+    writes its reasoning into the reply text (E-77); it honours its own `thinking` field. Qwen and DeepSeek use the
+    chat-template switch."""
+    if str(model).lower().startswith("glm"):
+        return {"thinking": {"type": "enabled" if on else "disabled"}}
+    return {"chat_template_kwargs": {"enable_thinking": on}}
 
 
 class LocalLLM:
@@ -358,7 +376,8 @@ class LocalLLM:
             # only a gateway/model that rejects the extension fields themselves loses them (E-44): dropping them after
             # any 400/422 silently turned reasoning on for the rest of the run (slow, cut-off replies)
             if e.status not in (400, 422) or not self.extra_body or not any(
-                    k in str(e) for k in ("chat_template_kwargs", "enable_thinking", "extra", "unexpected", "unknown")):
+                    k in str(e) for k in ("chat_template_kwargs", "enable_thinking", "thinking", "extra", "unexpected",
+                                          "unknown")):
                 raise
             from ucd import diag
             diag.event("error", "llm.extra_body_dropped", role=self.role, model=self.model, message=str(e)[:200])
@@ -437,16 +456,28 @@ def check() -> int:
             print(f"credit   : {llm.credit()}")
         except LLMError as e:
             print(f"credit   : {e}")
-    try:
-        t0 = time.time()
-        llm.verify_model = False
-        r = llm.complete_text("Reply with one JSON object only.", 'Return exactly {"action": "status"}')
-        print(f"chat     : {r[:120]!r} ({time.time() - t0:.1f}s, api={llm.api}) "
-              f"-> JSON ok: {extract_json(r) == {'action': 'status'}}")
-    except Exception as e:
-        print(f"chat     : FAILED {e}")
-        return 1
-    return 0
+    failed = 0
+    for role in ROLES:                                 # one test call per role: each may use another model or switch
+        if role != "planner" and role_settings(dict(cfg["llm"]), role)["model"] in (
+                role_settings(dict(cfg["llm"]), r)["model"] for r in ROLES[:ROLES.index(role)]):
+            continue                                   # same model already tested
+        one = LocalLLM(cfg, timeout=120, role=role)
+        one.max_retries, one.verify_model = 1, False
+        try:
+            t0 = time.time()
+            r = one.complete_text("Reply with one JSON object only.", 'Return exactly {"action": "status"}')
+            ok = extract_json(r) == {"action": "status"}
+            print(f"chat     : {role:<8} {one.model}: {r[:100]!r} ({time.time() - t0:.1f}s, api={one.api}) -> JSON ok: {ok}")
+            if one.finish_reason == "length":
+                print(f"WARNING  : {one.model} hit its output limit on a one-line task: reasoning is probably still on")
+            elif r.strip() and not r.lstrip().startswith(("{", "```")):
+                print(f"WARNING  : {one.model} writes text before the JSON (inline reasoning?): its thinking switch "
+                      f"{thinking_switch(one.model, False)} may not be honoured; long replies can be cut off")
+            failed += not ok
+        except Exception as e:
+            print(f"chat     : {role:<8} {one.model}: FAILED {e}")
+            failed += 1
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

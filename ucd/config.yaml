@@ -27,9 +27,10 @@ llm:
   #                                a few calls per run; a third model family, so its review is independent of the planner
   # Not chosen: deepseek-v4-pro-ax (index 36 with 49B active: outscored by the lighter V4.1 Flash), qwen3-8-flash-next-ax
   # (index reports disagree; same family as the critic). Scores are vendor or Artificial Analysis figures in reasoning
-  # mode; the gateway's "-ax" deployments may differ. Thinking: on for the critic (few calls), off for the planner
-  # (25 calls; try --planner glm-5-3-ax:think in eval/experiments.py) and for intake.
+  # mode; the gateway's "-ax" deployments may differ. Thinking: on for the critic (few calls), off for planner and intake.
+  # Each family has its own thinking switch (ucd/llm.py thinking_switch): GLM ignores chat_template_kwargs and writes its
+  # reasoning into the reply (E-77), so it gets thinking.type; it still reasons internally, hence the planner's 12k budget.
   roles:
-    planner: {model: glm-5-3-ax, max_tokens: 6144, temperature: 0}             # design loop: many turns; 0 = reproducible
+    planner: {model: glm-5-3-ax, max_tokens: 12288, temperature: 0}            # design loop: many turns; 0 = reproducible
     intake:  {model: deepseek-v4-1-flash-ax, max_tokens: 3072}                 # protocol check + questions
     critic:  {model: qwen3-8-max-ax, max_tokens: 8192, thinking: true}         # clinical critic + waiver judge

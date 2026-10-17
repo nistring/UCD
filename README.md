@@ -204,7 +204,7 @@ Each arm is a set of `run_config.json` switches, so the same switches work on an
 
 ```bash
 python -m eval.experiments run <samples> --arms no_intake --jobs 4 \
-    --planner glm-5-3-ax --planner glm-5-3-ax:think --planner qwen3-8-max-ax                 # planner models
+    --planner deepseek-v4-1-flash-ax --planner glm-5-3-ax --planner glm-5-3-ax:think       # planner models
 python -m eval.experiments intake <samples> --models deepseek-v4-1-flash-ax,glm-5-3-ax --out <dir>   # intake models
 UCD_CRITIC_MODEL=<model> python -m eval.judge_eval --reps 2                                        # critic models
 ```
@@ -242,11 +242,13 @@ LLM settings live in [`ucd/config.yaml`](ucd/config.yaml); environment variables
 
 | Role | Model and settings | Why |
 |---|---|---|
-| `planner` | `glm-5-3-ax`, thinking off, temperature 0 | top index, at about twice the speed and two-thirds the price of Qwen3.8-Max; a run makes about 25 planner calls, so speed matters most here |
+| `planner` | `glm-5-3-ax`, thinking off, temperature 0, 12k output tokens | top index, at about twice the speed and two-thirds the price of Qwen3.8-Max; a run makes about 25 planner calls, so speed matters most here |
 | `intake` | `deepseek-v4-1-flash-ax` | the lightest model with an index near 40; intake makes a few short calls |
 | `critic` | `qwen3-8-max-ax`, thinking on | top index and the strongest reasoning scores (GPQA Diamond 92.6); its cost matters little at a few calls per run; a different model family from the planner keeps the review independent |
 
-Not chosen: `deepseek-v4-pro-ax` scores below its lighter successor V4.1 Flash, and `qwen3-8-flash-next-ax` has conflicting index reports and shares the critic's family. Reasoning mode stays off for the planner to keep 25-call runs fast; compare it with `--planner glm-5-3-ax:think` (see [Comparing models](#comparing-models)). Any OpenAI-compatible endpoint works.
+A lighter planner, `deepseek-v4-1-flash-ax` (index 39–40, 8–16B active), is the alternative to compare against (`--planner deepseek-v4-1-flash-ax`, see [Comparing models](#comparing-models)). Not chosen: `deepseek-v4-pro-ax` scores below its lighter successor V4.1 Flash, and `qwen3-8-flash-next-ax` has conflicting index reports and shares the critic's family. Reasoning mode stays off for planner and intake to keep runs light.
+
+**Thinking switches differ by model family.** Qwen and DeepSeek use `chat_template_kwargs: {enable_thinking: ...}`; GLM ignores that field and writes its reasoning into the reply, so it gets its own `thinking: {type: disabled}` (`ucd/llm.py`, `thinking_switch`). `python -m ucd.llm check` sends one test call per role and warns when a model writes text before its JSON or hits its output limit. Any OpenAI-compatible endpoint works.
 
 | Variable | Effect |
 |---|---|

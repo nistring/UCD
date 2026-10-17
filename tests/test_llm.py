@@ -119,3 +119,19 @@ def test_verify_model_rejects_asr_and_unknown(server):
     c.model = "nope"
     with pytest.raises(L.LLMError, match=r"one of: \['chat-model'\]"):
         c.complete_text("s", "u")
+
+
+def test_each_model_family_gets_its_own_thinking_switch(monkeypatch):
+    """E-77: glm-5-3 ignored chat_template_kwargs, wrote its reasoning into the reply and was cut off at 6144 tokens;
+    sent together with the generic switch, its own `thinking` field stopped working too."""
+    cfg = {"base_url": "https://example.org/v1", "model": "m", "api_key": "none",
+           "extra_body": {"chat_template_kwargs": {"enable_thinking": False, "other": 1}}}
+    for var in ("UCD_LLM_THINKING", "UCD_PLANNER_THINKING", "UCD_PLANNER_MODEL", "UCD_LLM_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+    glm = L.role_settings({**cfg, "roles": {"planner": {"model": "glm-5-3-ax"}}}, "planner")["extra_body"]
+    assert glm == {"thinking": {"type": "disabled"}, "chat_template_kwargs": {"other": 1}}
+    qwen = L.role_settings({**cfg, "roles": {"critic": {"model": "qwen3-8-max-ax", "thinking": True}}}, "critic")
+    assert qwen["extra_body"]["chat_template_kwargs"] == {"other": 1, "enable_thinking": True}
+    monkeypatch.setenv("UCD_PLANNER_THINKING", "1")
+    assert L.role_settings({**cfg, "roles": {"planner": {"model": "glm-5-3-ax"}}}, "planner")["extra_body"]["thinking"] \
+        == {"type": "enabled"}
