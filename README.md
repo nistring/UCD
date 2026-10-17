@@ -230,11 +230,13 @@ UCD_CRITIC_MODEL=<model> python -m eval.judge_eval --reps 2                     
 
 LLM settings live in [`ucd/config.yaml`](ucd/config.yaml); environment variables override them.
 
-| Role | Default model | Job |
+| Role | Recommended model and settings | Why (observed in this project's runs, not a benchmark) |
 |---|---|---|
-| `planner` | `deepseek-v4-pro-ax` | the design loop (many turns, temperature 0) |
-| `intake` | `deepseek-v4-pro-ax` | protocol check and questions |
-| `critic` | `qwen3-8-max-ax` | clinical critic and waiver judge (a different model family from the planner) |
+| `planner` | `deepseek-v4-pro-ax`, thinking off, temperature 0 | ran a design by turn 8 in its first live run; the example study matched the ground truth (Jaccard 0.994). A smaller model (`qwen3-8-flash-next-ax`) spent 24 of 30 turns on lookups and never ran a design |
+| `intake` | `deepseek-v4-pro-ax` | asked three sensible questions in 18 s with the schema in view |
+| `critic` | `qwen3-8-max-ax` | a different model family from the planner, so the review is independent; 24 s per review, and it caught a wrong sodium window, an undeclared landmark and model separation. `glm-5-3-ax` returned no valid reply after 259 s |
+
+Reasoning ("thinking") mode stays off by default: it is slower, and long replies were cut off at the token limit before. It is worth testing as a planner variant (`--planner deepseek-v4-pro-ax:think`, see [Comparing models](#comparing-models)). The models above are those of the KHDP gateway; any OpenAI-compatible endpoint works.
 
 | Variable | Effect |
 |---|---|

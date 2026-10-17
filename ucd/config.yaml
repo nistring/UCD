@@ -19,8 +19,17 @@ llm:
   extra_body:                   # Qwen3 thinking off = faster; dropped automatically if the endpoint rejects it
     chat_template_kwargs: {enable_thinking: false}
   # Per role you may also set base_url, temperature, max_tokens and thinking (true/false).
+  # Recommended setup for the KHDP gateway, from the runs recorded so far (not a benchmark; compare models with
+  # eval/experiments.py --planner / intake and eval/judge_eval.py before changing it):
+  #   planner  deepseek-v4-pro-ax, thinking off, temperature 0: ran a design by turn 8 in its first live run; the
+  #            example study reached Jaccard 0.994 against the ground truth. qwen3-8-flash-next-ax spent 24 of 30
+  #            turns on lookups and never ran a design. Thinking stays off: slower, and long replies were cut off at
+  #            the token limit before; try it as a planner variant (--planner deepseek-v4-pro-ax:think).
+  #   intake   deepseek-v4-pro-ax: three sensible questions in 18 s on the schema-aware intake.
+  #   critic   qwen3-8-max-ax: a different model family from the planner (independent review), 24 s per review,
+  #            caught a wrong sodium window, an undeclared landmark and model separation. glm-5-3-ax returned no
+  #            JSON after 259 s; deepseek models would share the planner's family.
   roles:
     planner: {model: deepseek-v4-pro-ax, max_tokens: 6144, temperature: 0}  # design loop: many turns; 0 = reproducible
     intake:  {model: deepseek-v4-pro-ax, max_tokens: 3072}                  # protocol check + questions
-    critic:  {model: qwen3-8-max-ax, max_tokens: 2048}                      # clinical critic + waiver judge: a different
-                                                                            # model family from the planner
+    critic:  {model: qwen3-8-max-ax, max_tokens: 2048}                      # clinical critic + waiver judge
