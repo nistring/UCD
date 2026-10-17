@@ -19,13 +19,15 @@ llm:
   extra_body:                   # Qwen3 thinking off = faster; dropped automatically if the endpoint rejects it
     chat_template_kwargs: {enable_thinking: false}
   # Per role you may also set base_url, temperature, max_tokens and thinking (true/false).
-  # Model choice (2026-10-17): one light model for every role, thinking off. deepseek-v4-1-flash-ax scores 39-40 on the
+  # Model choice (2026-10-17): one light model for every role, thinking on. deepseek-v4-1-flash-ax scores 39-40 on the
   # Artificial Analysis Intelligence Index with 8-16B active parameters (552B total): the lightest model near the top of
-  # the gateway's list (the heaviest, glm-5-3-ax and qwen3-8-max-ax, score 45). One model also means one thinking
-  # switch. To change it, edit the model below, or set UCD_LLM_MODEL (all roles) / UCD_<ROLE>_MODEL (one role).
-  # Note: the critic then shares the planner's model family; a different family (e.g. qwen3-8-max-ax) gives a more
+  # the gateway's list (the heaviest, glm-5-3-ax and qwen3-8-max-ax, score 45). That score is measured with reasoning
+  # on, and reasoning tokens are cheap on a model this size, so thinking is on; the output budgets leave room for it.
+  # Too slow? UCD_PLANNER_THINKING=0 turns it off for the planner only (UCD_LLM_THINKING=0 for every role).
+  # To change the model, edit it below, or set UCD_LLM_MODEL (all roles) / UCD_<ROLE>_MODEL (one role).
+  # Note: the critic shares the planner's model family; a different family (e.g. qwen3-8-max-ax) gives a more
   # independent review. Check a setup with: python -m ucd.llm check
   roles:
-    planner: {model: deepseek-v4-1-flash-ax, max_tokens: 8192, temperature: 0}  # design loop: many turns; 0 = reproducible
-    intake:  {model: deepseek-v4-1-flash-ax, max_tokens: 3072}                  # protocol check + questions
-    critic:  {model: deepseek-v4-1-flash-ax, max_tokens: 4096}                  # clinical critic + waiver judge
+    planner: {model: deepseek-v4-1-flash-ax, max_tokens: 16384, temperature: 0, thinking: true}  # design loop: ~25 calls
+    intake:  {model: deepseek-v4-1-flash-ax, max_tokens: 8192, thinking: true}                   # protocol check + questions
+    critic:  {model: deepseek-v4-1-flash-ax, max_tokens: 8192, thinking: true}                   # clinical critic + waivers
