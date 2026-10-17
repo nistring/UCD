@@ -10,6 +10,7 @@ from ucd import llm as L
 
 class Stub(BaseHTTPRequestHandler):
     calls = []
+    bodies = []          # request bodies of the POSTs
     script = []          # list of (status, body, headers) consumed per POST
 
     def log_message(self, *a):
@@ -27,7 +28,7 @@ class Stub(BaseHTTPRequestHandler):
 
     def do_POST(self):
         Stub.calls.append(self.headers.get("Authorization"))
-        self.rfile.read(int(self.headers["Content-Length"]))
+        Stub.bodies.append(json.loads(self.rfile.read(int(self.headers["Content-Length"]))))
         status, body, headers = Stub.script.pop(0)
         self._send(status, body, headers)
 
@@ -41,7 +42,7 @@ def server(monkeypatch):
     srv = HTTPServer(("127.0.0.1", 0), Stub)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     monkeypatch.setattr(L.time, "sleep", lambda s: None)
-    Stub.calls, Stub.script = [], []
+    Stub.calls, Stub.script, Stub.bodies = [], [], []
     yield f"http://127.0.0.1:{srv.server_port}/v1"
     srv.shutdown()
 
@@ -135,3 +136,17 @@ def test_each_model_family_gets_its_own_thinking_switch(monkeypatch):
     monkeypatch.setenv("UCD_PLANNER_THINKING", "1")
     assert L.role_settings({**cfg, "roles": {"planner": {"model": "glm-5-3-ax"}}}, "planner")["extra_body"]["thinking"] \
         == {"type": "enabled"}
+
+
+def test_a_reply_cut_off_while_thinking_is_asked_again_without_thinking(server, monkeypatch):
+    """E-79: with thinking on, the planner's reasoning used the whole 16k budget and the turn was lost."""
+    monkeypatch.delenv("UCD_LLM_THINKING", raising=False)
+    monkeypatch.delenv("UCD_PLANNER_THINKING", raising=False)
+    cut = {"choices": [{"finish_reason": "length", "message": {"content": ""}}]}
+    ok = {"choices": [{"finish_reason": "stop", "message": {"content": "{\"action\": \"status\"}"}}]}
+    Stub.script = [(200, cut, {}), (200, ok, {})]
+    llm = L.LocalLLM({"llm": {"base_url": server, "model": "chat-model", "api_key": "k",
+                              "roles": {"planner": {"thinking": True}}}})
+    assert L.extract_json(llm.complete_text("s", "u")) == {"action": "status"} and llm.finish_reason == "stop"
+    assert Stub.bodies[0]["chat_template_kwargs"]["enable_thinking"] is True
+    assert Stub.bodies[1]["chat_template_kwargs"]["enable_thinking"] is False

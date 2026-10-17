@@ -6,6 +6,7 @@ import types
 import pytest
 
 from ucd import loop
+from ucd.actions import parse_action
 from ucd.llm import citations, extract_json, strip_citations, strip_think
 
 
@@ -139,3 +140,12 @@ def test_thinking_off_survives_unrelated_bad_requests(monkeypatch):
     with pytest.raises(LLMError):
         llm._chat("s", "u")
     assert llm.extra_body                                       # still there
+
+
+def test_content_without_its_fence_still_arrives_and_a_second_action_is_refused():
+    """E-80: '{"action": "write", "file": "design/query.sql"}' followed by unfenced SQL gave 'Extra data' twice."""
+    act = parse_action('{"action": "write", "file": "design/query.sql"}\nWITH a AS (SELECT 1)\nSELECT * FROM a\n')
+    assert act["action"] == "write" and act["body"] == "WITH a AS (SELECT 1)\nSELECT * FROM a"
+    assert parse_action('{"action": "run"}\nRunning the design now.') == {"action": "run"}
+    with pytest.raises(ValueError, match="second action"):
+        parse_action('{"action": "run"}\n{"action": "status"}')

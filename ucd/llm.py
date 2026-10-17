@@ -275,6 +275,12 @@ def role_settings(llm: dict[str, Any], role: str) -> dict[str, Any]:
     return out
 
 
+def _thinking_on(extra_body: dict[str, Any]) -> bool:
+    """Does this request body turn reasoning on (by either family's switch)?"""
+    return bool((extra_body.get("chat_template_kwargs") or {}).get("enable_thinking")) or \
+        (extra_body.get("thinking") or {}).get("type") == "enabled"
+
+
 def thinking_switch(model: str, on: bool) -> dict[str, Any]:
     """The request field that turns reasoning on or off for this model. GLM ignores chat_template_kwargs and then
     writes its reasoning into the reply text (E-77); it honours its own `thinking` field. Qwen and DeepSeek use the
@@ -386,6 +392,15 @@ class LocalLLM:
             out = self._request("POST", f"{self.base_url}/chat/completions", body)
         choice = out["choices"][0]
         self.finish_reason = choice.get("finish_reason")     # "length" = cut off at max_tokens (E-37)
+        if self.finish_reason == "length" and _thinking_on(self.extra_body):
+            # E-79: the reasoning used the whole budget; the same call once more without it, so the turn is not lost
+            from ucd import diag
+            diag.event("error", "llm.cut_off_thinking", role=self.role, model=self.model, max_tokens=self.max_tokens)
+            off = dict(body)
+            for k, v in thinking_switch(self.model, False).items():
+                off[k] = {**off[k], **v} if isinstance(v, dict) and isinstance(off.get(k), dict) else v
+            choice = self._request("POST", f"{self.base_url}/chat/completions", off)["choices"][0]
+            self.finish_reason = choice.get("finish_reason")
         return strip_think(choice["message"].get("content") or "")
 
     def model_entries(self) -> list[dict]:

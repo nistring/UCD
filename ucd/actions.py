@@ -3,6 +3,7 @@
 that holds its own fenced blocks arrives whole. The JSON itself may come in a ```json fence."""
 from __future__ import annotations
 
+import json
 import re
 
 from ucd.llm import extract_json
@@ -10,6 +11,19 @@ from ucd.llm import extract_json
 OPEN = re.compile(r"```[ \t]*[A-Za-z0-9_-]*[ \t]*\n")
 SECOND_ACTION = re.compile(r'^\s*\{\s*"action"\s*:', re.M)
 JSON_FENCE = re.compile(r"```[ \t]*json[ \t]*\n(.*?)```", re.S | re.I)
+BLOCK_ACTIONS = {"write", "edit", "explore"}       # actions whose content comes in the block after the JSON
+
+
+def _leading_json(text: str) -> tuple[dict | None, str]:
+    """(the JSON object the reply starts with, the text after it), or (None, text) when it does not start with one."""
+    i = text.find("{")
+    if i < 0 or text[:i].strip():
+        return None, text
+    try:
+        obj, k = json.JSONDecoder().raw_decode(text[i:])
+    except ValueError:
+        return None, text
+    return (obj, text[i + k:]) if isinstance(obj, dict) and "action" in obj else (None, text)
 
 
 def parse_action(raw: str) -> dict:
@@ -23,6 +37,15 @@ def parse_action(raw: str) -> dict:
     if m and end < m.end():
         raise ValueError("the fenced block after the JSON is not closed (``` missing), so nothing was changed")
     body, head = (rest[m.end():end], rest[:m.start()] + rest[end + 3:]) if m else (None, rest)
+    if m is None and not j:                         # E-80: JSON, then the file or SQL without its fence
+        lead, tail = _leading_json(head)
+        if lead is not None and tail.strip():
+            if SECOND_ACTION.search(tail):
+                raise ValueError("the reply holds a second action; send one action per reply (the next one in the next "
+                                 "turn)")
+            if lead.get("action") in BLOCK_ACTIONS:
+                body = tail.strip("\n")
+            head = json.dumps(lead)                 # text after any other action is commentary: ignored
     act = extract_json(j.group(1) if j else head)
     if not isinstance(act, dict) or "action" not in act:
         raise ValueError("JSON object without an 'action' field")
