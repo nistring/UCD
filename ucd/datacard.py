@@ -51,20 +51,23 @@ def build(dataset: str, refresh: bool = False) -> dict[str, Any]:
     return card
 
 
-def render(dataset: str) -> str:
+def render(dataset: str, notes: bool = True) -> str:
+    """The Data Card text. notes=False (ablation) leaves out the dataset notes and documented facts: schema only."""
     card = build(dataset)
-    facts = (yaml.safe_load(FACTS.read_text(encoding="utf-8")) or {}).get(dataset, {})
-    notes = DOCS / f"{dataset}_notes.md"
+    facts = (yaml.safe_load(FACTS.read_text(encoding="utf-8")) or {}).get(dataset, {}) if notes else {}
+    nf = DOCS / f"{dataset}_notes.md"
     lines = [f"# Data Card: {facts.get('label', dataset)}", ""]
-    if notes.exists():
-        lines += [notes.read_text(encoding="utf-8").strip(), ""]
+    if notes and nf.exists():
+        lines += [nf.read_text(encoding="utf-8").strip(), ""]
     from ucd import datasets
     units = datasets.get(dataset).get("units") or {}
     if units:
         lines += ["## Units of analysis (values of unit_of_analysis, fine -> coarse)"]
         lines += [f"- `{lvl}`: one row per `{u['id']}` (`{u['table']}`)" for lvl, u in units.items()] + [""]
-    lines += ["## Documented dataset facts", "```yaml", yaml.safe_dump(facts, allow_unicode=True, sort_keys=False).strip(),
-              "```", "", "## Tables (rows; column: type [non-null fraction] - description)"]
+    if facts:
+        lines += ["## Documented dataset facts", "```yaml", yaml.safe_dump(facts, allow_unicode=True, sort_keys=False).strip(),
+                  "```", ""]
+    lines += ["## Tables (rows; column: type [non-null fraction] - description)"]
     for name, t in card["tables"].items():
         lines.append(f"\n### {name}  ({t['rows']:,} rows)")
         for c in t["columns"]:

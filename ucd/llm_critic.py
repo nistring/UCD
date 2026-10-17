@@ -189,12 +189,13 @@ def review(protocol: str, items: Any, spec_text: str, card: dict, findings: list
     return {"overall": "error", "issues": [], "backend": backend, "error": str(last_err)[:300]}
 
 
-def context(dataset: str, protocol: str) -> str:
+def context(dataset: str, protocol: str, notes: bool = True) -> str:
     """What the critic should know about the data and the topic: ucd/docs/<dataset>_notes.md and the critic notes
-    of the topic packs that apply (E-58: without them the critic guessed, e.g. SOFA-2 read as a later SOFA)."""
+    of the topic packs that apply (E-58: without them the critic guessed, e.g. SOFA-2 read as a later SOFA).
+    notes=False (ablation) leaves the dataset notes out."""
     from ucd import packs
     f = Path(__file__).resolve().parent / "docs" / f"{dataset}_notes.md"
-    parts = [f.read_text(encoding="utf-8")[:9000]] if f.exists() else []
+    parts = [f.read_text(encoding="utf-8")[:9000]] if notes and f.exists() else []
     parts += [n for n in packs.critic_notes(protocol, dataset) if n]
     return "\n\n".join(parts)
 

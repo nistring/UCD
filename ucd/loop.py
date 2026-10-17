@@ -33,6 +33,7 @@ from ucd import __version__, datacard, diag, verdict
 from ucd.actions import parse_action
 from ucd.actions import why_unparsable as _why_unparsable
 from ucd.ask import AUTO, MAX_OPTIONS, Asker, clean_options
+from ucd.cli import _run_options
 from ucd.cli import main as ucd_main
 from ucd.critic import MAX_ITER
 from ucd.gate import ROOT, Gate, GateError
@@ -185,6 +186,9 @@ def _act(act: dict[str, Any], run_dir: Path, turn: int, asker: Asker | None = No
         _clarify_protocol(run_dir, act["question"], r["answer"], r["how"])
         return (f"PROTOCOL UPDATED. Your question and the answer ({r['how']}) are now part of the protocol: "
                 f"{r['answer']}. Change only the parts of the design this affects.")
+    opts = _run_options(run_dir)
+    if kind in ("lookup", "explore") and not opts.get("explore", True):
+        return ("REFUSED: lookup and explore are switched off in this run: design from the Data Card, then run.")
     if kind == "lookup":
         n_look = _n_lookups(run_dir)
         if n_look >= MAX_LOOKUPS:
@@ -203,6 +207,8 @@ def _act(act: dict[str, Any], run_dir: Path, turn: int, asker: Asker | None = No
         groups = [g.strip() for g in groups.split(",")] if isinstance(groups, str) else groups
         metrics = [m for m in (act.get("metrics") or []) if str(m).strip().lower() not in ("count", "n", "count(*)")]
         source = act.get("from") or act.get("body") or ""
+        if not opts.get("concepts", True) and _uses_concepts(source):
+            return "REFUSED: concept.* tables are switched off in this run; use the dataset's own tables."
         return json.dumps(Gate.shared(dataset, run_dir=run_dir).aggregate(source, groups, metrics), ensure_ascii=False)
     if kind in ("write", "edit"):
         f, rel = _inside(run_dir, act["file"])
@@ -260,6 +266,8 @@ def _act(act: dict[str, Any], run_dir: Path, turn: int, asker: Asker | None = No
         sp.parent.mkdir(parents=True, exist_ok=True)
         sp.write_text(text, encoding="utf-8")
         problem = sql_check(run_dir, dataset, text)
+        if not problem and not opts.get("concepts", True) and _uses_concepts(text):
+            problem = "concept.* tables are switched off in this run; use the dataset's own tables"
         if problem:                                    # an SQL slip: nothing ran, no design attempt used
             diag.event("sql_check", "loop", run=run_dir.name, message=problem.splitlines()[0])
             return (f"SQL CHECK FAILED (nothing was run; no design attempt used): {problem}{_where_in_query(run_dir, problem)}\n"
@@ -365,7 +373,7 @@ def run_loop(topic: str, run_dir: Path, datasets: list[str], max_turns: int = MA
     llm = llm or LocalLLM(cfg)
     _record_setup(run_dir, topic, question, system, cfg, llm)
     _seed_design(run_dir)
-    card = f"Data Card ({dataset}):\n{datacard.render(dataset)}"
+    card = f"Data Card ({dataset}):\n{datacard.render(dataset, notes=_run_options(run_dir).get('notes', True))}"
     log = run_dir / "loop_log.jsonl"
     history: list[str] = []
     stop_said = False                 # the last run said "Stop suggested: True"
@@ -635,13 +643,31 @@ def _system_prompt(run_dir: Path, question: str, dataset: str) -> str:
     from ucd import datasets as reg
     system = (ROOT / "ucd" / "planner_prompt.md").read_text(encoding="utf-8").format(
         run_dir=run_dir.as_posix(), question=question.strip(), dataset=reg.describe(dataset))
-    lib = concepts.prompt_text(dataset)
-    return system + ("\n\n## Action protocol\n" + ACTIONS
+    opts = _run_options(run_dir)
+    use_concepts = opts.get("concepts", True)
+    lib = concepts.prompt_text(dataset) if use_concepts else ""
+    llm_c, rules = opts.get("llm_critic", True), opts.get("rule_feedback", True)
+    critics = ("no critic reviews your designs in this run: a run shows only its execution results" if not (llm_c or rules)
+               else "the LLM clinical critic is switched off: findings come from the rules only" if not llm_c
+               else "rule findings are not shown in this run: findings come from the LLM clinical critic only")
+    off = [s for s, on in (("lookup and explore are switched off: design from the Data Card", opts.get("explore", True)),
+                          ("concept.* tables are switched off: use the dataset's own tables", use_concepts),
+                          (f"at most {opts.get('max_iter')} design run(s)", not opts.get("max_iter")),
+                          (critics, llm_c and rules),
+                          ("waiver requests are ignored in this run", opts.get("waivers", True)))
+           if not on]
+    return system + ("\n\n## This run's configuration\n" + "\n".join(f"- {s}" for s in off) if off else "") + (
+                     "\n\n## Action protocol\n" + ACTIONS
                      + "\n\n## DesignSpec fields (design/spec.yaml; the query is design/query.sql)\n"
                      + _capture(["template"]).split("\nanalysis_sql:")[0].strip()
                      + (f"\n\n{lib}\nUse these tested concepts instead of re-deriving the same definitions: fewer SQL "
                         "errors, and a concept is computed once and then cached." if lib else "")
-                     + packs.planner_notes(question, dataset))
+                     + (packs.planner_notes(question, dataset) if use_concepts else ""))
+
+
+def _uses_concepts(sql: str) -> bool:
+    from ucd import concepts
+    return bool(concepts.referenced(sql or ""))
 
 
 def _items_ok(content) -> bool:
@@ -737,7 +763,7 @@ def _changes_since_run(run_dir: Path) -> int:
 def _next_step(run_dir: Path, turn: int, max_turns: int, stop_said: bool = False) -> str:
     """Where the run stands, in one line, and what is due near the end."""
     n_runs, rnd = _n_runs(run_dir), _n_runs(run_dir, this_round=True)
-    line = (f"Turn {turn + 1}/{max_turns}. Design runs {rnd}/{MAX_ITER} in this round ({n_runs} in all); lookups "
+    line = (f"Turn {turn + 1}/{max_turns}. Design runs {rnd}/{int(_run_options(run_dir).get('max_iter') or MAX_ITER)} in this round ({n_runs} in all); lookups "
             f"{_n_lookups(run_dir)}/{MAX_LOOKUPS}.")
     changed = _changes_since_run(run_dir)
     if changed:

@@ -30,7 +30,7 @@ def test_loop_runs_actions_and_survives_bad_turns(tmp_path, monkeypatch):
         '{"action": "done"}',
     ]
     monkeypatch.setattr(loop, "LocalLLM", lambda cfg=None: ScriptedLLM(replies))
-    monkeypatch.setattr(loop.datacard, "render", lambda d: f"(Data Card for {d})")   # full MIMIC card scans chartevents
+    monkeypatch.setattr(loop.datacard, "render", lambda d, **k: f"(Data Card for {d})")   # full MIMIC card scans chartevents
     loop.run_loop("t9_trap_dayparity", tmp_path, ["mimic"], max_turns=10)
     log = [json.loads(l) for l in (tmp_path / "loop_log.jsonl").read_text(encoding="utf-8").splitlines()]
     obs = [r["observation"] for r in log]
@@ -131,7 +131,7 @@ def test_user_can_end_the_loop_early(tmp_path, monkeypatch):
                 raise KeyboardInterrupt                      # Ctrl+C while waiting for the model
             return '{"action": "status"}'
     monkeypatch.setattr(loop, "LocalLLM", lambda cfg=None: CtrlC())
-    monkeypatch.setattr(loop.datacard, "render", lambda d: "(card)")
+    monkeypatch.setattr(loop.datacard, "render", lambda d, **k: "(card)")
     fm = loop.run_loop("t9_trap_dayparity", tmp_path / "a", ["mimic"], max_turns=10)
     assert CtrlC.calls == 2 and "Ctrl+C" in fm.read_text(encoding="utf-8")
 
@@ -182,7 +182,7 @@ def test_design_problem_detects_small_cohorts_and_constant_exposure(tmp_path):
 def test_small_cohort_goes_back_to_design_then_asks(tmp_path, monkeypatch):
     from ucd.ask import Asker
     monkeypatch.setattr(loop, "_capture", _fake_runner(40, 5))
-    monkeypatch.setattr(loop.datacard, "render", lambda d: "(card)")
+    monkeypatch.setattr(loop.datacard, "render", lambda d, **k: "(card)")
     _design(tmp_path)
     replies = [RUN, '{"action": "write", "file": "final.md", "content": "# done"}', RUN, RUN]
     monkeypatch.setattr(loop, "LocalLLM", lambda cfg=None: ScriptedLLM(replies))
@@ -212,7 +212,7 @@ def test_infeasible_action_lets_the_user_decide(tmp_path, monkeypatch):
     from ucd.ask import Asker
     answers = iter(["2", "1"])                                    # keep designing, then stop
     asker = Asker("interactive", read=lambda p="": next(answers), write=lambda *_: None)
-    monkeypatch.setattr(loop.datacard, "render", lambda d: "(card)")
+    monkeypatch.setattr(loop.datacard, "render", lambda d, **k: "(card)")
     inf = '{"action": "infeasible", "reason": "coffee intake is not recorded"}'
     monkeypatch.setattr(loop, "LocalLLM", lambda cfg=None: ScriptedLLM([inf, '{"action": "status"}', inf]))
     fm = loop.run_loop("t9_trap_dayparity", tmp_path, ["mimic"], max_turns=10, asker=asker)

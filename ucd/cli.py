@@ -82,6 +82,18 @@ def hidden_card_path(run_dir: Path, dataset: str, it: int) -> Path:
     return HIDDEN_CARDS / _rel(run_dir) / f"{dataset}_iter{it}.json"
 
 
+def hidden_critique_path(run_dir: Path, dataset: str, it: int) -> Path:
+    """The full rule critique of a run whose planner may not see rule findings (run_config rule_feedback: false)."""
+    return HIDDEN_CARDS / _rel(run_dir) / f"{dataset}_iter{it}_critique.json"
+
+
+def _llm_findings_only(crit: dict) -> dict:
+    """The critique as a planner without rule feedback sees it: the LLM critic's findings only, no internal error."""
+    shown = [f for f in crit["findings"] if str(f.get("rule", "")).startswith("L")]
+    return {**crit, "findings": shown, "n_block": sum(f["severity"] == "block" for f in shown), "internal_error": None,
+            "I_deterministic": None, "dimensions": {}, "waivers": None, "rule_feedback": False}
+
+
 def design_round(run_dir: Path) -> int:
     """The current design round: it starts at 0 and the loop starts a new one when the protocol changes or the user
     chooses to keep designing (meta.json `round`; E-60). The stop rule counts only this round's designs."""
@@ -103,7 +115,8 @@ def _fmt_feedback(it: int, card: dict, crit: dict, stop: tuple[bool, str]) -> st
     """The planner's view of one iteration. Findings and the stop line come FIRST: the loop keeps only the first
     part of each observation, and with the card first the findings were cut off (E-21)."""
     blocks = [f["rule"] for f in crit["findings"] if f["severity"] == "block"]
-    L = [f"# Iteration {it}: internal error I = {crit['internal_error']}  (dimensions: {crit['dimensions']})",
+    I = crit["internal_error"] if crit.get("internal_error") is not None else "n/a (rule critic not shown in this run)"
+    L = [f"# Iteration {it}: internal error I = {I}  (dimensions: {crit['dimensions']})",
          f"**Blocking findings to fix: {', '.join(blocks) if blocks else 'none'}**",
          f"**Stop suggested: {stop[0]}**" + (f" ({stop[1]})" if stop[0] else " - revise the spec and run again."), ""]
     if card.get("error"):
@@ -146,6 +159,9 @@ def cmd_run(a) -> int:
     idir.mkdir(exist_ok=True)
     shutil.copy(a.spec, idir / "spec.yaml")
     t0 = time.time()
+    opts = _run_options(run_dir)
+    show_rules = opts.get("rule_feedback", True)        # ablations: the planner may see no rule findings
+    max_iter = int(opts.get("max_iter") or C.MAX_ITER)
     try:
         spec = load_spec(a.spec, a.dataset)
     except Exception as e:
@@ -164,7 +180,6 @@ def cmd_run(a) -> int:
         items = (yaml.safe_load(pf.read_text(encoding="utf-8")) or []) if pf.exists() else None
         if isinstance(items, dict):
             items = items.get("items", [])
-        opts = _run_options(run_dir)
         frozen_f = ddir / "FROZEN.json"
         blinded = bool(opts.get("blind_outcome")) and not frozen_f.exists()
         opts["blind"] = blinded
@@ -175,15 +190,18 @@ def cmd_run(a) -> int:
         full_card = card
         shown_card = blind_card(card) if blinded else card
         crit["options"] = opts
-        # independent LLM clinical critic after every design
-        rev = llm_critic.review(protocol, items, Path(a.spec).read_text(encoding="utf-8"), shown_card, crit["findings"],
-                                [dict(h, primary=None) for h in hist] if blinded else hist,
-                                llm_critic.context(a.dataset, protocol))
-        (idir / "llm_critic.json").write_text(json.dumps(rev, ensure_ascii=False, indent=1), encoding="utf-8")
+        if opts.get("llm_critic", True):                # independent LLM clinical critic after every design
+            rev = llm_critic.review(protocol, items, Path(a.spec).read_text(encoding="utf-8"), shown_card,
+                                    crit["findings"] if show_rules else [],
+                                    [dict(h, primary=None) for h in hist] if blinded else hist,
+                                    llm_critic.context(a.dataset, protocol, notes=opts.get("notes", True)))
+            (idir / "llm_critic.json").write_text(json.dumps(rev, ensure_ascii=False, indent=1), encoding="utf-8")
+        else:
+            rev = {"overall": "n/a", "issues": [], "backend": "switched off (run_config llm_critic: false)"}
         crit = C.merge(crit, llm_critic.to_findings(rev))
         crit["llm_overall"] = rev.get("overall")
         crit["clinical_plausibility"] = rev.get("clinical_plausibility")
-        if spec.waivers:
+        if spec.waivers and opts.get("waivers", True):
             crit, _ = C.apply_waivers(crit, spec, rev.get("waiver_decisions") or [], protocol, card)
         if items is None:
             crit["findings"].insert(0, {"rule": "P0", "dimension": "validity", "severity": "warn",
@@ -208,15 +226,23 @@ def cmd_run(a) -> int:
             hp = _hidden_path(run_dir, a.dataset, it)
             hp.parent.mkdir(parents=True, exist_ok=True)
             cohort[list(dict.fromkeys(keep))].astype({"unit_id": "string", "subject_key": "string"}).to_parquet(hp)
+        if not show_rules:                              # ablation: rule findings stay on the evaluator side
+            hc = hidden_critique_path(run_dir, a.dataset, it)
+            hc.parent.mkdir(parents=True, exist_ok=True)
+            hc.write_text(json.dumps(crit, ensure_ascii=False, default=str), encoding="utf-8")
+            crit = _llm_findings_only(crit)
     # only designs that executed count toward the iteration limit and stability; failed attempts are capped apart
     rnd = design_round(run_dir)
     this_round = [h for h in hist if h.get("round", 0) == rnd]   # a protocol change starts a fresh budget (E-60)
     ok = [h for h in this_round if not (h.get("card") or {}).get("error")]
     if card.get("error"):
         stop = (True, f"reached {C.MAX_ATTEMPTS} attempts") if len(this_round) + 1 >= C.MAX_ATTEMPTS else (False, "")
+    elif not show_rules and not opts.get("llm_critic", True):     # no critic at all: only the cap ends the loop
+        stop = (True, f"reached max iterations ({max_iter})") if len(ok) + 1 >= max_iter else (False, "")
     else:
-        stop = C.should_stop([h["internal_error"] for h in ok] + [crit["internal_error"]], crit.get("n_block", 1))
-        if stop[0] and crit.get("llm_overall") == "error" and len(ok) + 1 < C.MAX_ITER:
+        stop = C.should_stop([h["internal_error"] for h in ok] + [crit["internal_error"]], crit.get("n_block", 1),
+                             max_iter)
+        if stop[0] and crit.get("llm_overall") == "error" and len(ok) + 1 < max_iter:
             stop = (False, "")                         # no clinical review this time: not a clean design (R4)
     frozen_f = ddir / "FROZEN.json"
     post_freeze = frozen_f.exists() and spec is not None
