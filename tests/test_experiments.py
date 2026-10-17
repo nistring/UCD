@@ -73,3 +73,29 @@ def test_single_generator_runs_once_and_hides_the_rule_critic(tmp_path, monkeypa
     shown = json.loads((run / "mimic" / "iter_1" / "critique.json").read_text(encoding="utf-8"))
     assert shown["internal_error"] is None and not [f for f in shown["findings"] if not f["rule"].startswith("L")]
     assert (run / "final.md").exists() and (run / "verdict.json").exists()
+
+
+def test_summary_counts_correct_rejections(tmp_path):
+    rows = [("T001", "empty_result|unanswerable", "True"), ("T007", "contradictory|empty_result", "False"),
+            ("T002", "normal", "True")]
+    for s, exp, ok in rows:
+        X.append_row(tmp_path, {"sample": s, "arm": "full", "rep": 1, "status": "ok", "expected": exp, "verdict_ok": ok})
+    assert "| 2/3 | 1/2 |" in X.summarize(tmp_path)
+
+
+def test_planner_settings_and_the_stuck_metric(tmp_path, monkeypatch):
+    assert X.planner_env("") == ("", {})
+    label, env = X.planner_env("deepseek-v4-pro-ax:think")
+    assert label == "deepseek-v4-pro-ax+think" and env["UCD_PLANNER_THINKING"] == "1" and env["UCD_PLANNER_MAX_TOKENS"]
+    from ucd.llm import load_config, role_settings
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    rs = role_settings(dict(load_config()["llm"]), "planner")
+    assert rs["model"] == "deepseek-v4-pro-ax" and rs["max_tokens"] == 16384
+    assert rs["extra_body"]["chat_template_kwargs"]["enable_thinking"] is True
+    assert role_settings(dict(load_config()["llm"]), "critic")["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
+    log = tmp_path / "loop_log.jsonl"
+    log.write_text("\n".join(json.dumps({"observation": o}) for o in
+                             ["wrote x", "NO CHANGE: a", "NO CHANGE: a", "INVALID: y", "NO CHANGE: a"]), encoding="utf-8")
+    row = X.collect(tmp_path, "mimic", None)
+    assert row["noop_streak"] == 2 and row["bad_turns"] == 1 and row["turns"] == 5

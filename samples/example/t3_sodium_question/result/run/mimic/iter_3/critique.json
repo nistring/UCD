@@ -1,0 +1,66 @@
+{
+ "internal_error": 0.1605,
+ "dimensions": {
+  "validity": 0.515,
+  "feasibility": 0.0,
+  "quality": 0.0,
+  "model": 0.0,
+  "stability": 0.0,
+  "clinical": 0.03
+ },
+ "findings": [
+  {
+   "rule": "V3",
+   "dimension": "validity",
+   "severity": "block",
+   "message": "Immortal-time risk: exposure is assessed until 24.0 h after index while the outcome is counted from 0.0 h; 14.6% of events occur inside the exposure window",
+   "evidence": {
+    "events_before_exposure_window_end": 966,
+    "events_before_exposure_window_end_frac": 0.1465
+   },
+   "fix": "Options: (a) landmark at the end of the exposure window; (b) Cox model with a time-dependent exposure; (c) if the protocol itself fixes this exposure window, request a waiver citing it and report a landmark sensitivity analysis."
+  },
+  {
+   "rule": "P3",
+   "dimension": "validity",
+   "severity": "info",
+   "message": "Deviation from protocol item P9: Collapsed to avoid quasi-complete separation",
+   "evidence": null,
+   "fix": "Implement the item as written if the data allow; otherwise keep the justified deviation."
+  },
+  {
+   "rule": "L0",
+   "dimension": "clinical",
+   "severity": "info",
+   "message": "LLM critic unavailable: no JSON object in model output",
+   "evidence": null,
+   "fix": ""
+  }
+ ],
+ "n_block": 1,
+ "hard": false,
+ "gate": false,
+ "stability": {
+  "current": 1.452,
+  "previous": 1.452,
+  "relative_change": 0.0
+ },
+ "I_deterministic": 0.1545,
+ "llm_overall": "error",
+ "clinical_plausibility": null,
+ "waivers": [
+  {
+   "rule": "V3",
+   "requested_items": [
+    "P4",
+    "P5",
+    "P6"
+   ],
+   "judge_granted": false,
+   "quote": "",
+   "reason": "",
+   "applied": false,
+   "refused_because": "judge denied: no decision returned"
+  }
+ ]
+}

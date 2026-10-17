@@ -1,0 +1,6 @@
+{
+ "status": "partial",
+ "reason": "The design implements the protocol as specified, but the primary analysis retains an immortal-time bias: exposure is assessed over the first 24 hours while the outcome is counted from time zero, and 14.6% of deaths occur within the exposure window. The V3 waiver was refused by the independent judge, and the protocol itself fixes both the 24-hour exposure window and the outcome from time zero, so the bias cannot be removed without deviating from the protocol. A 24-hour landmark sensitivity analysis is reported (OR 1.463, 95% CI 1.372-1.561), which is consistent with the primary estimate (OR 1.452, 95% CI 1.367-1.542).",
+ "limitation": "Immortal-time bias in the primary analysis because the exposure window extends 24 hours after time zero while outcomes are counted from time zero; 14.6% of in-hospital deaths occur before the exposure window closes. The protocol mandates this design, and the V3 waiver was refused, so the primary estimate should be interpreted with caution and alongside the 24-hour landmark sensitivity analysis.",
+ "source": "agent"
+}

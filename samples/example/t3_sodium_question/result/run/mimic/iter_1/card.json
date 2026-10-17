@@ -1,0 +1,233 @@
+{
+ "dataset": "mimic",
+ "title": "Low sodium at ICU admission and in-hospital death in adult ICU patients",
+ "flow": [
+  {
+   "step": "rows returned by analysis_sql",
+   "n_units": 65366,
+   "n_patients": 65366
+  },
+  {
+   "step": "incl_adult: age >= 18 at ICU admission",
+   "n_units": 65366,
+   "n_patients": 65366
+  },
+  {
+   "step": "incl_has_sodium_24h: has at least one serum sodium value recorded within 24 hours of ICU admission",
+   "n_units": 36946,
+   "n_patients": 36946
+  }
+ ],
+ "n_start": 65366,
+ "n_final": 36946,
+ "retained_frac": 0.565,
+ "empty": false,
+ "duplicate_unit_ids": 0,
+ "n_patients": 36946,
+ "units_per_patient_gt1_frac": 0.0,
+ "contiguous_with_previous_unit_frac": 0.0,
+ "outcome_missing_frac": 0.0,
+ "outcome": {
+  "events": 4269,
+  "n": 36946,
+  "rate": 0.1155,
+  "ci": [
+   0.1123,
+   0.1188
+  ]
+ },
+ "timing": {
+  "events_with_time": 2958,
+  "events_before_index": "<10",
+  "events_before_prediction_time": "<10",
+  "events_before_prediction_time_frac": 0.0014,
+  "events_before_outcome_from": "<10",
+  "events_before_outcome_from_frac": 0.0014,
+  "events_before_exposure_window_end": 655,
+  "events_before_exposure_window_end_frac": 0.1534
+ },
+ "table1": {
+  "low_sodium": {
+   "missing_frac": 0.0,
+   "levels": {
+    "False": {
+     "n": 30969,
+     "outcome_rate": 0.106
+    },
+    "True": {
+     "n": 5977,
+     "outcome_rate": 0.165
+    }
+   },
+   "n_levels": 2,
+   "zero_variance": false
+  },
+  "age": {
+   "missing_frac": 0.0,
+   "p01": 20.0,
+   "q1": 52.0,
+   "median": 65.0,
+   "q3": 78.0,
+   "p99": 92.0,
+   "mean": 63.6836,
+   "sd": 18.1087,
+   "extreme_frac": 0.0,
+   "zero_variance": false,
+   "median_outcome1": 72.0,
+   "median_outcome0": 65.0
+  },
+  "sex": {
+   "missing_frac": 0.0,
+   "levels": {
+    "M": {
+     "n": 20335,
+     "outcome_rate": 0.116
+    },
+    "F": {
+     "n": 16611,
+     "outcome_rate": 0.115
+    }
+   },
+   "n_levels": 2,
+   "zero_variance": false
+  },
+  "admission_type": {
+   "missing_frac": 0.0,
+   "levels": {
+    "EW EMER.": {
+     "n": 22149,
+     "outcome_rate": 0.122
+    },
+    "URGENT": {
+     "n": 6985,
+     "outcome_rate": 0.157
+    },
+    "OBSERVATION ADMIT": {
+     "n": 4291,
+     "outcome_rate": 0.085
+    },
+    "SURGICAL SAME DAY ADMISSION": {
+     "n": 2025,
+     "outcome_rate": 0.004
+    },
+    "DIRECT EMER.": {
+     "n": 766,
+     "outcome_rate": 0.09
+    },
+    "ELECTIVE": {
+     "n": 395,
+     "outcome_rate": 0.015
+    },
+    "EU OBSERVATION": {
+     "n": 204,
+     "outcome_rate": 0.059
+    },
+    "DIRECT OBSERVATION": {
+     "n": 113,
+     "outcome_rate": 0.08
+    },
+    "AMBULATORY OBSERVATION": {
+     "n": 18,
+     "outcome_rate": 0.0
+    }
+   },
+   "n_levels": 9,
+   "zero_variance": false
+  }
+ },
+ "model": {
+  "n_used": 36946,
+  "n_dropped_incomplete": 0,
+  "complete_case_drop_frac": 0.0,
+  "n_params": 11,
+  "epv": 388.1,
+  "converged": false,
+  "separation_suspect": true,
+  "terms": [
+   {
+    "term": "age",
+    "or": 1.023,
+    "ci_low": 1.021,
+    "ci_high": 1.025,
+    "p": 0.0
+   },
+   {
+    "term": "sex=F",
+    "or": 0.939,
+    "ci_low": 0.879,
+    "ci_high": 1.003,
+    "p": 0.0598
+   },
+   {
+    "term": "admission_type=AMBULATORY OBSERVATION",
+    "or": 0.0,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=DIRECT EMER.",
+    "or": 6.892,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=DIRECT OBSERVATION",
+    "or": 6.096,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=ELECTIVE",
+    "or": 1.032,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=EU OBSERVATION",
+    "or": 4.887,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=EW EMER.",
+    "or": 9.611,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=OBSERVATION ADMIT",
+    "or": 6.275,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=SURGICAL SAME DAY ADMISSION",
+    "or": 0.295,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   },
+   {
+    "term": "admission_type=URGENT",
+    "or": 12.699,
+    "ci_low": null,
+    "ci_high": null,
+    "p": 1.0
+   }
+  ],
+  "intercept": -5.709,
+  "auroc_apparent": 0.649,
+  "auroc_cv": 0.648,
+  "cv_calibration_intercept": -0.0,
+  "cv_calibration_slope": 0.987,
+  "brier_cv": 0.0995,
+  "type": "logistic"
+ }
+}

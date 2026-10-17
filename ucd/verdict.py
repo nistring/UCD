@@ -30,18 +30,27 @@ def parse(text: str) -> dict[str, str]:
     return {"status": v["status"], "reason": str(v.get("reason") or ""), "limitation": str(v.get("limitation") or "")}
 
 
-def _last_card(run_dir: Path) -> dict[str, Any] | None:
+def _last_record(run_dir: Path) -> dict[str, Any] | None:
+    """The iteration record of the last executed design."""
     for p in sorted(run_dir.glob("*/iterations.jsonl")):
         recs = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
         ok = [r for r in recs if not (r.get("card") or {}).get("error")]
         if ok:
-            return ok[-1].get("card") or {}
+            return ok[-1]
     return None
+
+
+def _last_card(run_dir: Path) -> dict[str, Any] | None:
+    rec = _last_record(run_dir)
+    return None if rec is None else rec.get("card") or {}
 
 
 def finalize(run_dir: Path, hint: str = "", reason: str = "") -> dict[str, str]:
     """Write run_dir/verdict.json: the planner's own verdict if valid and consistent, else a derived one."""
-    path, card = run_dir / "verdict.json", _last_card(run_dir)
+    path, rec = run_dir / "verdict.json", _last_record(run_dir)
+    card = None if rec is None else rec.get("card") or {}
+    blocks = sorted({str(f.get("rule", "")).split("-")[0] for f in ((rec or {}).get("critique") or {}).get("findings", [])
+                     if f.get("severity") == "block"})
     own = None
     if path.exists():
         try:
@@ -49,7 +58,7 @@ def finalize(run_dir: Path, hint: str = "", reason: str = "") -> dict[str, str]:
         except ValueError:
             own = None
     empty = bool(card and card.get("empty"))
-    if own and not (empty and own["status"] == "normal"):
+    if own and not ((empty or blocks) and own["status"] == "normal"):
         v = {**own, "source": "agent"}
     elif hint in STATUSES:
         v = {"status": hint, "reason": reason, "limitation": "", "source": "auto"}
@@ -59,6 +68,10 @@ def finalize(run_dir: Path, hint: str = "", reason: str = "") -> dict[str, str]:
     elif empty:
         v = {"status": "empty_result", "reason": "the final cohort is empty: no unit meets every criterion",
              "limitation": (own or {}).get("limitation", ""), "source": "auto"}
+    elif blocks:                                       # E-76: open blocking findings are not a normal answer
+        v = {"status": "partial", "reason": "the last executed design still had blocking findings "
+             f"({', '.join(blocks[:8])}); see final.md", "limitation": (own or {}).get("limitation", ""),
+             "source": "auto"}
     else:
         v = {"status": "normal", "reason": "a design was executed; see final.md", "limitation": "", "source": "auto"}
     path.parent.mkdir(parents=True, exist_ok=True)

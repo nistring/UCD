@@ -19,6 +19,7 @@
   python -m ucd samples/<name> [--auto]          run one sample
   python -m ucd.sample run samples/a samples/b --jobs 2   several samples in parallel (auto mode)
   python -m ucd.sample report samples/<name>     rebuild report.md from an existing result/ (no LLM calls)
+  python -m ucd.sample score samples/tasks/*/*    task scoreboard: accepted verdicts, expected cohorts, rejections
 
 The ground truth is read only after the design loop has finished, and only by the evaluator: the agent never
 sees it (it can neither read files nor receive these numbers).
@@ -132,6 +133,36 @@ def task_score(res: Path, gt: Path | None, conf: dict) -> dict:
                 "cohort_exact": E == G})
     out["passed"] = out["status_ok"] and out["cohort_exact"]
     return out
+
+
+def scoreboard(samples: list[Path], out: Path | None = None) -> str:
+    """Markdown table of task results: was the verdict one of the accepted ones, and the cohort the expected one?
+    Statuses and counts only."""
+    rows, passed, done, rejected, should_reject = [], 0, 0, 0, 0
+    for s in sorted(samples):
+        conf = yaml.safe_load((s / "sample.yaml").read_text(encoding="utf-8")) if (s / "sample.yaml").exists() else {}
+        allowed = list((conf or {}).get("expected_status") or [])
+        if not allowed:
+            continue
+        sc = s / "result" / "task_score.json"
+        if not sc.exists():
+            rows.append(f"| {s.name} | {', '.join(allowed)} | not run | | | |")
+            continue
+        r = json.loads(sc.read_text(encoding="utf-8"))
+        done += 1
+        passed += bool(r.get("passed"))
+        if "normal" not in allowed:                    # a question the agent should not answer as asked
+            should_reject += 1
+            rejected += bool(r.get("status_ok"))
+        coh = (f"{r['n_agent']} / {r['n_expected']} (J {r['jaccard']})" if r.get("cohort_expected") else "no cohort expected")
+        rows.append(f"| {s.name} | {', '.join(allowed)} | {r.get('status')} | {'yes' if r.get('status_ok') else 'no'} | "
+                    f"{coh} | {'PASS' if r.get('passed') else 'fail'} |")
+    text = "\n".join([f"# Task scoreboard ({passed}/{done} passed; invalid questions rejected: {rejected}/{should_reject})",
+                      "", "| task | accepted verdicts | verdict | verdict ok | cohort agent / expected | result |",
+                      "|---|---|---|---|---|---|"] + rows) + "\n"
+    if out:
+        out.write_text(text, encoding="utf-8")
+    return text
 
 
 def evaluate(run: Path, gt: Path | None, dataset: str) -> dict | None:
@@ -423,7 +454,12 @@ def main(argv=None) -> int:
     r.add_argument("--jobs", type=int, default=1, help="samples run in parallel (auto mode; cores and memory are split)")
     r.add_argument("--no-archive", action="store_true", help=argparse.SUPPRESS)
     w = sub.add_parser("report", help="rebuild report.md from an existing result/"); w.add_argument("sample")
+    c = sub.add_parser("score", help="scoreboard of task samples (accepted verdicts, expected cohort)")
+    c.add_argument("sample", nargs="+"); c.add_argument("--out", default=None, help="also write the table to this file")
     a = p.parse_args(argv)
+    if a.cmd == "score":
+        print(scoreboard([Path(s) for s in a.sample], Path(a.out) if a.out else None))
+        return 0
     if a.cmd == "run" and a.jobs > 1 and len(a.sample) > 1:
         run_parallel([Path(s) for s in a.sample], a.jobs)
     elif a.cmd == "run":

@@ -56,7 +56,7 @@ python -m ucd.selftest
 python -m ucd.llm check
 
 # 4. run the example study
-python -m ucd samples/t3_sodium_question
+python -m ucd samples/example/t3_sodium_question
 ```
 
 The example asks: *"Is low sodium at ICU admission linked to death in adult ICU patients?"*
@@ -157,10 +157,20 @@ Runs are written to `runs/ucd/<question>/<time>/`, or to `samples/<name>/result/
 
 ```bash
 python -m eval.experiments list                                              # the arms
-python -m eval.experiments run samples/t3_sodium_question --arms baselines   # or ablations, all, or a,b,c
-python -m eval.experiments run samples/a samples/b --arms all --reps 3 --out runs/experiments/main
-python -m eval.experiments summary runs/experiments/main                     # rebuild the summary table
+python -m eval.experiments run samples/example/t3_sodium_question --arms baselines   # or ablations, all, or a,b,c
+python -m eval.experiments run samples/tasks/*/* --arms all --out runs/experiments/tasks         # the rejection test
+python -m eval.experiments summary runs/experiments/tasks                    # rebuild the summary table
 ```
+
+### Samples
+
+| Folder | Contents |
+|---|---|
+| `samples/example/t3_sodium_question/` | the example study (a one-line question), with a published example run in `result/` |
+| `samples/tasks/answerable/T0xx/` | 20 artificially generated cohort tasks with a valid answer: the agent should build the cohort (verdict `normal`) |
+| `samples/tasks/not_answerable/T0xx/` | 4 tasks the agent should refuse or qualify: a population that cannot exist in the data, a value the data caps, criteria that contradict each other (verdict `empty_result`, `unanswerable`, `contradictory` or `partial`) |
+
+Each task's `sample.yaml` lists the verdicts it accepts. A task can also hold a `gt.csv` with the expected cohort, which holds real ids and is therefore not published. Score a set of runs with `python -m ucd.sample score samples/tasks/*/*`: it reports the share of accepted verdicts, the cohort agreement, and how many invalid tasks the agent rejected.
 
 **Baselines** use the same model and data access with less structure around it:
 
@@ -189,8 +199,8 @@ python -m eval.experiments summary runs/experiments/main                     # r
 - The rule critic scores every executed design in every arm. Where an arm hides it from the planner, it is stored on the evaluator side, so `I_rule` stays comparable.
 
 **Results:**
-- `<out>/results.csv` has one row per run: designs run, turns, seconds, cohort size, primary estimate, `I_rule`, open rule blocks, verdict, and Jaccard / recall / precision when the sample has a `gt.csv`.
-- `<out>/summary.md` holds the means per arm.
+- `<out>/results.csv` has one row per run: designs run, turns, seconds, cohort size, primary estimate, `I_rule`, open rule blocks, the verdict and whether the task accepts it, and Jaccard / recall / precision when the sample has a `gt.csv`.
+- `<out>/summary.md` holds the means per arm, the share of accepted verdicts, and the number of invalid tasks rejected.
 
 **Mechanism:** each arm is a set of `run_config.json` switches, so the same switches work on any run: `llm_critic`, `rule_feedback`, `waivers`, `explore`, `concepts`, `notes`, `max_iter`, `blind_outcome`.
 
@@ -266,7 +276,7 @@ A sample folder with a `gt.csv` runs the comparison automatically. These files h
 | `ucd/topics.yaml`, `ucd/packs.yaml` | stored protocol briefs (`--topic`) and topic packs |
 | `eval/` | evaluator side, hidden from the agent: `experiments.py` (baselines and ablations), `groundtruth.py`, reference studies, waiver-judge test, privacy audit |
 | `third_party/mimic-code/` | the MIT-licensed mimic-code DuckDB concepts (KDIGO, SOFA, Sepsis-3 …) |
-| `samples/t3_sodium_question/` | the example study |
+| `samples/` | the example study and the 24 task cases (see [Samples](#samples)) |
 | `docs/critic_rules.md` | rules for event-anchored and landmark designs |
 | `tests/` | `python -m pytest` |
 

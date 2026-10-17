@@ -77,3 +77,41 @@ def test_task_score_checks_status_and_cohort(tmp_path):
     s = task_score(res, gt, {"expected_status": ["normal"]})
     assert s["status_ok"] and s["n_both"] == 1 and s["recall"] == 0.5 and not s["cohort_exact"] and not s["passed"]
     assert task_score(res, None, {"expected_status": ["empty_result"]})["passed"] is False
+
+
+def test_open_blocking_findings_are_not_a_normal_verdict(tmp_path):
+    """E-76: the example run ended 'normal' although its last design had six blocking findings."""
+    d = tmp_path / "mimic"
+    d.mkdir()
+    rec = {"iter": 1, "card": {"n_final": 500}, "critique": {"findings": [
+        {"rule": "M2", "severity": "block"}, {"rule": "L2-sql", "severity": "block"}, {"rule": "Q1", "severity": "warn"}]}}
+    (d / "iterations.jsonl").write_text(json.dumps(rec) + "\n", encoding="utf-8")
+    v = verdict.finalize(tmp_path)
+    assert v["status"] == "partial" and "L2, M2" in v["reason"]
+    (tmp_path / "verdict.json").write_text('{"status": "normal"}', encoding="utf-8")
+    assert verdict.finalize(tmp_path)["status"] == "partial"           # the agent's own 'normal' is inconsistent too
+
+
+def test_read_accepts_the_run_directory_in_front_and_a_missing_dataset_folder(tmp_path):
+    """E-74: the planner read 'samples/.../run/iter_1/feedback.md' and got 'no file' twice."""
+    run = tmp_path / "result" / "run"
+    (run / "mimic" / "iter_1").mkdir(parents=True)
+    (run / "mimic" / "iter_1" / "feedback.md").write_text("# Iteration 1", encoding="utf-8")
+    for name in (f"{run.as_posix()}/mimic/iter_1/feedback.md", "iter_1/feedback.md", "mimic/iter_1/feedback.md"):
+        assert "# Iteration 1" in loop._act({"action": "read", "file": name}, run, 0, dataset="mimic"), name
+    assert loop._act({"action": "read", "file": "../../outside.md"}, run, 0, dataset="mimic").startswith("INVALID")
+
+
+def test_scoreboard_counts_rejected_invalid_questions(tmp_path):
+    from ucd.sample import scoreboard
+    for name, allowed, status in (("T001", ["empty_result", "unanswerable"], "unanswerable"),
+                                  ("T007", ["contradictory", "empty_result"], "normal"),
+                                  ("T002", ["normal"], "normal")):
+        d = tmp_path / name
+        (d / "result").mkdir(parents=True)
+        (d / "sample.yaml").write_text(yaml.safe_dump({"dataset": "mimic", "expected_status": allowed}), encoding="utf-8")
+        ok = status in allowed
+        (d / "result" / "task_score.json").write_text(json.dumps(
+            {"status": status, "status_ok": ok, "passed": ok, "cohort_expected": False}), encoding="utf-8")
+    board = scoreboard(sorted(tmp_path.iterdir()))
+    assert "2/3 passed; invalid questions rejected: 1/2" in board

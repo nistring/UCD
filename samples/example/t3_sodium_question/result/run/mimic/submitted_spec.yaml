@@ -1,0 +1,144 @@
+title: Low sodium at ICU admission and in-hospital death in adult ICU patients
+question: Is low sodium at ICU admission associated with in-hospital death in adult
+  ICU patients?
+pico:
+  population: Adult patients (anchor_age >= 18) with an ICU stay in MIMIC-IV 3.1
+  exposure_or_predictor: First serum sodium value recorded in the ICU within 24 hours
+    of ICU admission, below 135 mmol/L
+  comparator: First serum sodium value recorded in the ICU within 24 hours of ICU
+    admission, >= 135 mmol/L
+  outcome: In-hospital death (hospital_expire_flag = 1)
+unit_of_analysis: icu_stay
+repeated_units: first_only
+index_time: ICU admission time (icu.intime)
+prediction_time_h: 0
+outcome_from_h: 0
+population_criteria:
+- flag: incl_adult
+  description: age >= 18 at ICU admission
+- flag: incl_has_sodium_24h
+  description: has at least one serum sodium value recorded within 24 hours of ICU
+    admission
+exposure:
+  column: low_sodium
+  description: First serum sodium value recorded in the ICU within 24 hours of ICU
+    admission, below 135 mmol/L
+  type: binary
+  window_start_h: 0
+  window_end_h: 24
+outcome:
+  column: outcome
+  description: In-hospital death (hospital_expire_flag = 1)
+covariates:
+- column: age
+  description: age at ICU admission (years)
+  type: numeric
+  window_start_h: 0
+  window_end_h: 0
+- column: sex
+  description: sex (gender)
+  type: categorical
+  reference_level: M
+  window_start_h: 0
+  window_end_h: 0
+- column: admission_type
+  description: admission type
+  type: categorical
+  reference_level: EMERGENCY
+  window_start_h: 0
+  window_end_h: 0
+model:
+  type: logistic
+  predictors:
+  - low_sodium
+  - age
+  - sex
+  - admission_type
+  primary_term: low_sodium
+waivers:
+- rule: V3
+  protocol_items:
+  - P4
+  - P5
+  - P6
+  justification: Protocol fixes exposure window at 24h and outcome from time zero;
+    landmark sensitivity analysis added
+sensitivity:
+- name: 24 h landmark
+  flag: incl_alive_24h
+protocol_mapping:
+- item: P1
+  implemented_as: incl_adult
+  deviation: ''
+- item: P2
+  implemented_as: 'unit_of_analysis: icu_stay, repeated_units: first_only'
+  deviation: ''
+- item: P3
+  implemented_as: 'index_time: ICU admission time (icu.intime)'
+  deviation: ''
+- item: P4
+  implemented_as: incl_has_sodium_24h
+  deviation: ''
+- item: P5
+  implemented_as: 'exposure: low_sodium (first serum sodium within 24h of ICU admission
+    < 135 mmol/L)'
+  deviation: ''
+- item: P6
+  implemented_as: 'outcome: outcome (hospital_expire_flag = 1)'
+  deviation: ''
+- item: P7
+  implemented_as: 'covariates: age, sex, admission_type'
+  deviation: ''
+- item: P8
+  implemented_as: 'model: logistic regression with primary_term low_sodium'
+  deviation: ''
+- item: P9
+  implemented_as: admission_type collapsed into 4 groups in SQL
+  deviation: Collapsed to avoid quasi-complete separation
+- item: P10
+  implemented_as: 'sensitivity: 24h landmark'
+  deviation: ''
+shrink_justification: ''
+limitations:
+- 3.0% of first ICU stays excluded for lacking sodium within 24h
+- 14.6% of deaths occur before exposure window closes
+- URGENT admission type captures a heterogeneous group including inter-facility transfers
+changes_from_previous: Corrected limitations text (3.0% not 43.5%); added note on
+  URGENT heterogeneity; V3 waiver refused by judge, will address by changing primary
+  analysis to landmark at 24h
+analysis_sql: "WITH icu_stays AS (\n    SELECT\n        icu.subject_id,\n        icu.hadm_id,\n\
+  \        icu.stay_id,\n        icu.intime,\n        icu.outtime,\n        pat.anchor_age,\n\
+  \        pat.anchor_year,\n        pat.gender,\n        adm.admittime,\n       \
+  \ adm.admission_type,\n        adm.hospital_expire_flag,\n        adm.deathtime\n\
+  \    FROM icu.icustays icu\n    JOIN hosp.admissions adm\n      ON icu.hadm_id =\
+  \ adm.hadm_id\n    JOIN hosp.patients pat\n      ON icu.subject_id = pat.subject_id\n\
+  \    QUALIFY row_number() OVER (PARTITION BY icu.subject_id ORDER BY icu.intime)\
+  \ = 1\n),\nsodium_first AS (\n    SELECT\n        le.hadm_id,\n        le.charttime,\n\
+  \        le.valuenum,\n        row_number() OVER (\n            PARTITION BY le.hadm_id\n\
+  \            ORDER BY le.charttime\n        ) AS rn\n    FROM hosp.labevents le\n\
+  \    JOIN icu.icustays icu\n      ON le.hadm_id = icu.hadm_id\n    WHERE le.itemid\
+  \ IN (50824, 50983)\n      AND le.valuenum IS NOT NULL\n      AND le.charttime BETWEEN\
+  \ icu.intime AND icu.intime + INTERVAL 24 HOUR\n),\ncohort AS (\n    SELECT\n  \
+  \      s.subject_id,\n        s.hadm_id,\n        s.stay_id,\n        s.intime AS\
+  \ index_time,\n        s.outtime AS unit_end_time,\n        (s.anchor_age + (EXTRACT(YEAR\
+  \ FROM s.admittime) - s.anchor_year)) AS age,\n        s.gender AS sex,\n      \
+  \  CASE\n            WHEN s.admission_type IN ('EW EMER.', 'DIRECT EMER.') THEN\
+  \ 'EMERGENCY'\n            WHEN s.admission_type = 'URGENT' THEN 'URGENT'\n    \
+  \        WHEN s.admission_type IN ('ELECTIVE', 'SURGICAL SAME DAY ADMISSION') THEN\
+  \ 'ELECTIVE_SURGICAL'\n            ELSE 'OTHER'\n        END AS admission_type,\n\
+  \        s.hospital_expire_flag AS outcome,\n        CASE\n            WHEN s.anchor_age\
+  \ >= 18 THEN TRUE\n            ELSE FALSE\n        END AS incl_adult,\n        CASE\n\
+  \            WHEN sf.charttime IS NOT NULL THEN TRUE\n            ELSE FALSE\n \
+  \       END AS incl_has_sodium_24h,\n        CASE\n            WHEN sf.valuenum\
+  \ < 135 THEN TRUE\n            ELSE FALSE\n        END AS low_sodium,\n        CASE\n\
+  \            WHEN s.deathtime IS NOT NULL\n                 AND s.deathtime <= s.outtime\
+  \ THEN\n                date_diff('hour', s.intime, s.deathtime)\n            ELSE\
+  \ NULL\n        END AS outcome_time_h,\n        CASE\n            WHEN s.deathtime\
+  \ IS NULL\n                 OR s.deathtime > s.intime + INTERVAL 24 HOUR THEN TRUE\n\
+  \            ELSE FALSE\n        END AS incl_alive_24h\n    FROM icu_stays s\n \
+  \   LEFT JOIN sodium_first sf\n      ON s.hadm_id = sf.hadm_id\n     AND sf.rn =\
+  \ 1\n     AND sf.charttime BETWEEN s.intime AND s.intime + INTERVAL 24 HOUR\n)\n\
+  SELECT\n    subject_id AS subject_key,\n    hadm_id,\n    stay_id AS unit_id,\n\
+  \    index_time,\n    unit_end_time,\n    age,\n    sex,\n    admission_type,\n\
+  \    outcome,\n    incl_adult,\n    incl_has_sodium_24h,\n    low_sodium,\n    incl_alive_24h,\n\
+  \    outcome_time_h\nFROM cohort"

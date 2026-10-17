@@ -1,0 +1,6 @@
+{
+ "overall": "error",
+ "issues": [],
+ "backend": "openai_compat",
+ "error": "no JSON object in model output"
+}

@@ -46,7 +46,7 @@ SQL dialect is **DuckDB**:
 ## `analysis_sql` contract
 It is the file `design/query.sql`. It must return ONE row per candidate unit, with these columns:
 - `unit_id`, `subject_key` (the patient), `index_time` (timestamp of time zero), `unit_end_time` (timestamp; the end of the unit, e.g. discharge);
-- one BOOLEAN column per `population_criteria` flag. The runner applies them in order to build the flow diagram, so return the *candidate* rows and let the flags exclude;
+- one BOOLEAN column per `population_criteria` flag: **TRUE = the unit stays in the cohort**, FALSE = it is removed at this step. The runner applies them in order to build the flow diagram, so return the *candidate* rows and let the flags exclude. Write an exclusion as its keep-condition: `excl_x` is TRUE when the unit does NOT meet the exclusion criterion;
 - `outcome` (1/0), except for a cohort task (`model.type: cohort`), which has no outcome;
 - `outcome_time_h` (hours from index to the outcome event, NULL if no event) — strongly recommended;
 - `exposure_time_h` if the exposure has a time;

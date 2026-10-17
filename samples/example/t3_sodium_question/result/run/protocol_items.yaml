@@ -1,0 +1,30 @@
+- id: P1
+  kind: population
+  text: "Adult patients (anchor_age >= 18) with an ICU stay in MIMIC-IV 3.1."
+- id: P2
+  kind: exclusion
+  text: "Exclude patients with no sodium measured within 24h of ICU admission."
+- id: P3
+  kind: time_zero
+  text: "Time zero is ICU admission time (icu.intime)."
+- id: P4
+  kind: exposure
+  text: "First serum sodium value recorded in the ICU within 24 hours of ICU admission, below 135 mmol/L."
+- id: P5
+  kind: outcome
+  text: "In-hospital death (hospital_expire_flag = 1)."
+- id: P6
+  kind: covariate
+  text: "Age at admission."
+- id: P7
+  kind: covariate
+  text: "Sex."
+- id: P8
+  kind: covariate
+  text: "Admission type."
+- id: P9
+  kind: model
+  text: "Logistic regression (odds ratios)."
+- id: P10
+  kind: analysis
+  text: "Primary estimand: odds ratio for in-hospital death comparing patients with first ICU sodium < 135 mmol/L to those with first ICU sodium >= 135 mmol/L, adjusted for age, sex, and admission type."

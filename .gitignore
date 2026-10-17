@@ -12,7 +12,7 @@ physionet/
 runs/
 logs/
 **/gate.log
-samples/*/result*/
+samples/**/result*/
 
 # Ground truths and exported cohorts hold real patient ids
 **/gt.csv
@@ -46,3 +46,6 @@ dist/
 # Development logs (kept locally, not published)
 CHANGELOG.md
 ERRORS.md
+
+# The published example run (aggregates only; cohort.csv, gate.log and parquet stay ignored by the rules above)
+!samples/example/t3_sodium_question/result/

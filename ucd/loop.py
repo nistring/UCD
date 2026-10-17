@@ -96,8 +96,13 @@ def _capture(argv: list[str]) -> str:
 
 
 def _inside(run_dir: Path, name: str) -> tuple[Path, str | None]:
-    """(path, relative posix name) of a file inside the run directory; the name is None for a path outside it."""
-    f = (run_dir / str(name)).resolve()
+    """(path, relative posix name) of a file inside the run directory; the name is None for a path outside it.
+    A name that repeats the run directory in front (as the prompt shows it) is taken relative to it (E-74)."""
+    name = str(name).replace("\\", "/")
+    for prefix in {run_dir.as_posix(), run_dir.resolve().as_posix()}:
+        if name.startswith(prefix.rstrip("/") + "/"):
+            name = name[len(prefix.rstrip("/")) + 1:]
+    f = (run_dir / name).resolve()
     return f, f.relative_to(run_dir.resolve()).as_posix() if run_dir.resolve() in f.parents else None
 
 
@@ -254,6 +259,9 @@ def _act(act: dict[str, Any], run_dir: Path, turn: int, asker: Asker | None = No
         return done
     if kind == "read":
         f, rel = _inside(run_dir, act["file"])
+        if rel is not None and not f.is_file() and dataset:     # iter_1/feedback.md -> <dataset>/iter_1/feedback.md
+            g, r2 = _inside(run_dir, f"{dataset}/{rel}")
+            f, rel = (g, r2) if g.is_file() else (f, rel)
         if rel is None or not f.is_file():
             return f"INVALID: no file {act['file']!r} in your run directory"
         start = max(1, int(act.get("from_line") or 1))

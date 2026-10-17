@@ -239,7 +239,8 @@ ROLES = ("planner", "intake", "critic")
 def role_settings(llm: dict[str, Any], role: str) -> dict[str, Any]:
     """Settings for one agent role. Precedence (lowest -> highest):
     llm.* defaults < llm.roles.<role> (config.yaml) < UCD_LLM_MODEL (one model for every role) <
-    UCD_<ROLE>_MODEL / UCD_<ROLE>_BASE_URL (e.g. UCD_CRITIC_MODEL)."""
+    UCD_<ROLE>_MODEL / UCD_<ROLE>_BASE_URL (e.g. UCD_CRITIC_MODEL). Thinking: UCD_LLM_THINKING < UCD_<ROLE>_THINKING
+    (0/1); UCD_<ROLE>_MAX_TOKENS overrides the role's reply budget."""
     out = dict(llm)
     block = (llm.get("roles") or {}).get(role) or {}
     out.update({k: v for k, v in block.items() if v is not None and v != ""})
@@ -255,8 +256,11 @@ def role_settings(llm: dict[str, Any], role: str) -> dict[str, Any]:
     if str(out.get("api_key", "")).startswith("khdp_pat_") and not host.endswith("khdp.net"):
         out["api_key"] = "none"                     # never hand the KHDP token to another host
     think = out.get("thinking")
-    if os.environ.get("UCD_LLM_THINKING") in ("0", "1"):
-        think = os.environ["UCD_LLM_THINKING"] == "1"
+    for var in ("UCD_LLM_THINKING", f"UCD_{role.upper()}_THINKING"):    # all roles, then this role
+        if os.environ.get(var) in ("0", "1"):
+            think = os.environ[var] == "1"
+    if os.environ.get(f"UCD_{role.upper()}_MAX_TOKENS", "").isdigit():
+        out["max_tokens"] = int(os.environ[f"UCD_{role.upper()}_MAX_TOKENS"])
     if think is not None:        # Qwen-style switch; models that ignore it are unaffected, a 400/422 drops it
         out["extra_body"] = {**(out.get("extra_body") or {}), "chat_template_kwargs": {"enable_thinking": bool(think)}}
     return out

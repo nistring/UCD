@@ -9,6 +9,7 @@ quote) are applied too, so the reported rates are for the full waiver mechanism.
 from __future__ import annotations
 
 import argparse
+import time
 import json
 from pathlib import Path
 
@@ -76,13 +77,16 @@ def main() -> None:
     for name, prot, spec, finds, expect in CASES:
         rule = finds[0]["rule"]
         for k in range(a.reps):
+            t0 = time.time()
             rev = llm_critic.review(prot, None, spec, CARD, finds, [])
+            sec = round(time.time() - t0, 1)
             d = next((x for x in rev.get("waiver_decisions") or [] if str(x.get("rule", "")).startswith(rule)), {})
             judge = bool(d.get("granted"))
             quote_ok = bool(d.get("quote")) and quote_supported(d["quote"], prot)
             applied = judge and quote_ok
             results.append({"case": name, "rep": k + 1, "expected_grant": expect, "judge_granted": judge, "quote": d.get("quote", ""),
-                            "quote_verbatim": quote_ok, "applied": applied, "reason": str(d.get("reason", rev.get("error", "")))[:200]})
+                            "quote_verbatim": quote_ok, "applied": applied, "reason": str(d.get("reason", rev.get("error", "")))[:200],
+                            "critic_failed": rev.get("overall") == "error", "seconds": sec})
             print(f"{name:<62} rep {k+1}: expected {'GRANT' if expect else 'DENY '} | judge {'GRANT' if judge else 'DENY '}"
                   f" | quote ok {quote_ok} | applied {applied}", flush=True)
     pos = [r for r in results if r["expected_grant"]]
@@ -90,11 +94,16 @@ def main() -> None:
     summary = {"n": len(results),
                "false_waiver_rate_judge": sum(r["judge_granted"] for r in neg) / max(len(neg), 1),
                "false_waiver_rate_applied": sum(r["applied"] for r in neg) / max(len(neg), 1),
-               "false_denial_rate_applied": sum(not r["applied"] for r in pos) / max(len(pos), 1)}
+               "false_denial_rate_applied": sum(not r["applied"] for r in pos) / max(len(pos), 1),
+               "critic_failures": sum(r["critic_failed"] for r in results),
+               "median_seconds": sorted(r["seconds"] for r in results)[len(results) // 2] if results else None}
     print(json.dumps(summary, indent=1))
     import os
+    from ucd.llm import load_config, role_settings
     backend = os.environ.get("UCD_CRITIC_BACKEND", "claude_cli")
-    name = "judge_eval.json" if backend == "claude_cli" else f"judge_eval_{backend}_{os.environ.get('UCD_LLM_MODEL', 'local').replace(':', '-')}.json"
+    model = role_settings(dict(load_config()["llm"]), "critic")["model"]
+    think = "_think" if os.environ.get("UCD_CRITIC_THINKING") == "1" else ""
+    name = "judge_eval.json" if backend == "claude_cli" else f"judge_eval_{backend}_{model.replace(':', '-')}{think}.json"
     (ROOT / "eval" / name).write_text(json.dumps({"summary": summary, "results": results},
                                                                            indent=1, ensure_ascii=False), encoding="utf-8")
 

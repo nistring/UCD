@@ -1,0 +1,50 @@
+{
+ "issues": [
+  {
+   "severity": "warn",
+   "category": "sql",
+   "message": "The sodium_first CTE partitions by le.hadm_id rather than le.stay_id; if a patient has multiple ICU stays within the same hospitalization, the first sodium across all stays is selected and could be assigned to a later stay whose own 24-h window contains no sodium, misclassifying exposure",
+   "evidence": "sodium_first uses PARTITION BY le.hadm_id and the cohort join is ON s.hadm_id = sf.hadm_id AND sf.rn = 1",
+   "proposed_change": "Change the partition and join to stay_id: PARTITION BY le.stay_id in sodium_first and ON s.stay_id = sf.stay_id in the cohort join; this is a no-op for the current first-stay-per-patient cohort but makes the query correct if the unit of analysis ever changes"
+  },
+  {
+   "severity": "warn",
+   "category": "clinical",
+   "message": "14.6% of in-hospital deaths (966 of 6592) occur before the 24-h exposure window closes, meaning those patients may have died before a sodium could plausibly be drawn or before the \"first\" sodium truly represents the admission value; the primary OR of 1.452 is therefore partly driven by patients who were already dying at the time of measurement",
+   "evidence": "timing.events_before_exposure_window_end = 966, frac 0.1465; primary OR 1.452 vs sensitivity OR 1.463",
+   "proposed_change": "The 24-h landmark sensitivity (OR 1.463) already addresses this; report it as the primary robustness check and note in limitations that the primary estimate includes early deaths whose sodium may reflect terminal physiology rather than admission status"
+  },
+  {
+   "severity": "info",
+   "category": "clinical",
+   "message": "The exclusion of 1,964 stays (3.0%) for lacking sodium within 24 h is small and plausible for a US academic ICU where basic metabolic panels are drawn on admission; however the limitations section states 43.5% excluded, which contradicts the result card (retained_frac 0.97)",
+   "evidence": "flow: 65366 to 63402, retained_frac 0.97; limitations text says 43.5% excluded",
+   "proposed_change": "Correct the limitations text to state approximately 3.0% excluded"
+  },
+  {
+   "severity": "info",
+   "category": "statistics",
+   "message": "The URGENT admission-type category shows a higher mortality rate (13.5%) than EMERGENCY (12.1%), which is counterintuitive; this likely reflects case-mix differences (e.g. urgent transfers from other facilities with higher acuity) rather than a coding error, but is worth noting",
+   "evidence": "table1 admission_type URGENT outcome_rate 0.135 vs EMERGENCY 0.121",
+   "proposed_change": "No SQL change needed; add a brief note in limitations that URGENT captures a heterogeneous group including inter-facility transfers"
+  },
+  {
+   "severity": "info",
+   "category": "protocol",
+   "message": "The protocol says \"first serum sodium value recorded in the ICU\" but does not specify whether to pool chemistry (itemid 50983) and blood-gas (itemid 50824) sodium items; the SQL pools both, which is the sensible default per dataset notes",
+   "evidence": "SQL WHERE le.itemid IN (50824, 50983)",
+   "proposed_change": "No change needed; document in the spec that both chemistry and blood-gas sodium are pooled per dataset guidance"
+  }
+ ],
+ "waiver_decisions": [
+  {
+   "rule": "V3",
+   "granted": true,
+   "quote": "First serum sodium value recorded in the ICU within 24 hours of ICU admission, below 135 mmol/L ... In-hospital death (hospital_expire_flag = 1)",
+   "reason": "The protocol explicitly fixes a 24-h exposure window starting at ICU admission and defines the outcome as in-hospital death from time zero, so the overlap is mandated by the protocol; the planner has added a 24-h landmark sensitivity analysis as required"
+  }
+ ],
+ "overall": "accept",
+ "clinical_plausibility": 0.82,
+ "backend": "openai_compat"
+}

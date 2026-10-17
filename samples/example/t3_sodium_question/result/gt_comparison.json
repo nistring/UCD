@@ -1,0 +1,28 @@
+{
+ "file": "gt.csv",
+ "run": "samples\\example\\t3_sodium_question\\result\\run",
+ "dataset": "mimic",
+ "gt_source": "samples\\example\\t3_sodium_question\\gt.csv",
+ "cohort": {
+  "iteration": 3,
+  "agent_level": "icu_stay",
+  "gt_level": "icu_stay",
+  "compared_at": "icu_stay",
+  "mapping": {
+   "id_column": "stay_id",
+   "level": "icu_stay",
+   "outcome_column": "death"
+  },
+  "n_agent": 63402,
+  "n_gt": 63607,
+  "n_both": 63326,
+  "n_agent_only": 76,
+  "n_gt_only": 281,
+  "jaccard": 0.9944,
+  "recall": 0.9956,
+  "precision": 0.9988,
+  "outcome_rate_gt": 0.1036,
+  "outcome_rate_agent": 0.104,
+  "outcome_agreement_on_overlap": 1.0
+ }
+}

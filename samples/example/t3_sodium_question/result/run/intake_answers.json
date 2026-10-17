@@ -1,0 +1,38 @@
+[
+ {
+  "field": "exposure",
+  "question": "How should low sodium at ICU admission be defined?",
+  "answer": "First serum sodium value recorded in the ICU within 24 hours of ICU admission, below 135 mmol/L",
+  "how": "auto"
+ },
+ {
+  "field": "outcome",
+  "question": "Which death outcome should be used?",
+  "answer": "In-hospital death (hospital_expire_flag = 1)",
+  "how": "auto"
+ },
+ {
+  "field": "time_zero",
+  "question": "What should be the time zero for the analysis?",
+  "answer": "ICU admission time (icu.intime)",
+  "how": "auto"
+ },
+ {
+  "field": "exclusions",
+  "question": "Which patients should be excluded?",
+  "answer": "Exclude patients with no sodium measured within 24h of ICU admission",
+  "how": "auto"
+ },
+ {
+  "field": "covariates",
+  "question": "Which covariates should be adjusted for?",
+  "answer": "Age, sex, and admission type",
+  "how": "auto"
+ },
+ {
+  "field": "analysis",
+  "question": "Which analysis method should be used?",
+  "answer": "Logistic regression (odds ratios)",
+  "how": "auto"
+ }
+]
